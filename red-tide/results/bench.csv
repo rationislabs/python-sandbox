@@ -1,9 +1,9 @@
-gil,n_jobs,n_trials,seconds,trials_per_s,speedup,cpu,cores
-False,1,64,118.939,0.538,1.0,AMD Ryzen 5 2500U with Radeon Vega Mobile Gfx,8
-False,2,64,86.42,0.741,1.38,AMD Ryzen 5 2500U with Radeon Vega Mobile Gfx,8
-False,4,64,52.685,1.215,2.26,AMD Ryzen 5 2500U with Radeon Vega Mobile Gfx,8
-False,8,64,44.457,1.44,2.68,AMD Ryzen 5 2500U with Radeon Vega Mobile Gfx,8
-True,1,64,121.381,0.527,1.0,AMD Ryzen 5 2500U with Radeon Vega Mobile Gfx,8
-True,2,64,208.44,0.307,0.58,AMD Ryzen 5 2500U with Radeon Vega Mobile Gfx,8
-True,4,64,186.548,0.343,0.65,AMD Ryzen 5 2500U with Radeon Vega Mobile Gfx,8
-True,8,64,213.777,0.299,0.57,AMD Ryzen 5 2500U with Radeon Vega Mobile Gfx,8
+gil,n_jobs,n_trials,runs,seconds,cpu,cores,trials_per_s,speedup
+False,1,32,3,53.318,AMD Ryzen 5 2500U with Radeon Vega Mobile Gfx,8,0.6,1.0
+False,2,32,3,37.409,AMD Ryzen 5 2500U with Radeon Vega Mobile Gfx,8,0.855,1.43
+False,4,32,3,29.453,AMD Ryzen 5 2500U with Radeon Vega Mobile Gfx,8,1.086,1.81
+False,8,32,3,20.022,AMD Ryzen 5 2500U with Radeon Vega Mobile Gfx,8,1.598,2.66
+True,1,32,3,56.552,AMD Ryzen 5 2500U with Radeon Vega Mobile Gfx,8,0.566,1.0
+True,2,32,3,64.351,AMD Ryzen 5 2500U with Radeon Vega Mobile Gfx,8,0.497,0.88
+True,4,32,3,94.08,AMD Ryzen 5 2500U with Radeon Vega Mobile Gfx,8,0.34,0.6
+True,8,32,3,111.454,AMD Ryzen 5 2500U with Radeon Vega Mobile Gfx,8,0.287,0.51
