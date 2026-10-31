@@ -1,6 +1,7 @@
 """`bloom`: fetch the data, train and evaluate, benchmark, report."""
 
 import argparse
+import json
 from datetime import date
 from pathlib import Path
 
@@ -64,14 +65,17 @@ def train(n_trials: int, n_jobs: int) -> None:
         "persistence": models.persistence(test),
         "season": models.season_rate(known, test),
     }
-    for kind in ("logreg", "hgb"):
+    best = {}
+    for kind in ("count", "logreg", "hgb"):
         study = models.tune(kind, train_df, val, n_trials, n_jobs, seed=0)
         print(
             f"{kind}: best validation PR-AUC {study.best_value:.3f} {study.best_params}"
         )
+        best[kind] = study.best_params
+        cols = models.features_for(kind)
         model = models.make_model(kind, study.best_params)
-        model.fit(known[features.FEATURES], known["y"])
-        scores[kind] = model.predict_proba(test[features.FEATURES])[:, 1]
+        model.fit(known[cols], known["y"])
+        scores[kind] = model.predict_proba(test[cols])[:, 1]
 
     rows = []
     for name, score in scores.items():
@@ -81,6 +85,7 @@ def train(n_trials: int, n_jobs: int) -> None:
     RESULTS.mkdir(parents=True, exist_ok=True)
     table = pd.DataFrame(rows)
     table.to_csv(RESULTS / "metrics.csv", index=False)
+    (RESULTS / "best_params.json").write_text(json.dumps(best, indent=2) + "\n")
     print(markdown(table))
 
 

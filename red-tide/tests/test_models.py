@@ -66,3 +66,25 @@ def test_tune_runs_small_study_on_fixture(parts):
     )
     assert len(study.trials) == 4
     assert 0.0 <= study.best_value <= 1.0
+
+
+def test_hgb_has_no_random_early_stopping():
+    assert models.make_model("hgb", {}).early_stopping is False
+
+
+def test_tune_with_enqueued_params_runs_exactly_those(parts):
+    params = models.sample_params("hgb", 3, seed=1)
+    study = models.tune(
+        "hgb", parts["train"], parts["val"], 3, 2, seed=1, enqueue=params
+    )
+    key = lambda p: sorted(p.items())
+    assert sorted(map(key, (t.params for t in study.trials))) == sorted(
+        map(key, params)
+    )
+
+
+def test_count_only_model_uses_two_features(parts):
+    model = models.make_model("count", {})
+    tr = parts["train"]
+    model.fit(tr[models.COUNT_FEATURES], tr["y"])
+    assert models.COUNT_FEATURES == ["last_count_log", "last_bloom"]

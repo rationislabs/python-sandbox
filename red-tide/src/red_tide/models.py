@@ -14,7 +14,9 @@ from sklearn.preprocessing import StandardScaler
 
 from red_tide.features import FEATURES
 
-Kind = Literal["logreg", "hgb"]
+Kind = Literal["count", "logreg", "hgb"]
+# The persistence information alone, as numbers: is weather worth anything on top?
+COUNT_FEATURES = ["last_count_log", "last_bloom"]
 
 
 def persistence(df: pd.DataFrame) -> np.ndarray:
@@ -29,16 +31,21 @@ def season_rate(train: pd.DataFrame, df: pd.DataFrame) -> np.ndarray:
 
 
 def make_model(kind: Kind, params: dict, seed: int = 0):
-    if kind == "logreg":
+    if kind in ("count", "logreg"):
         return make_pipeline(
             SimpleImputer(strategy="median"),
             StandardScaler(),
             LogisticRegression(class_weight="balanced", max_iter=1000, **params),
         )
-    # Handles NaN natively.
+    # Handles NaN natively. No early stopping: it would hold out a random 10 % of the
+    # training rows, and the split here is by time, never at random.
     return HistGradientBoostingClassifier(
-        class_weight="balanced", random_state=seed, **params
+        class_weight="balanced", early_stopping=False, random_state=seed, **params
     )
+
+
+def features_for(kind: Kind) -> list[str]:
+    return COUNT_FEATURES if kind == "count" else FEATURES
 
 
 def recall_at_precision(y: np.ndarray, scores: np.ndarray, p: float = 0.5) -> float:
@@ -64,7 +71,7 @@ def evaluate(y, scores) -> dict:
 
 
 def suggest(kind: Kind, trial: optuna.Trial) -> dict:
-    if kind == "logreg":
+    if kind in ("count", "logreg"):
         return {"C": trial.suggest_float("C", 1e-3, 1e2, log=True)}
     return {
         "learning_rate": trial.suggest_float("learning_rate", 0.01, 0.3, log=True),
@@ -77,13 +84,21 @@ def suggest(kind: Kind, trial: optuna.Trial) -> dict:
     }
 
 
+def sample_params(kind: Kind, n: int, seed: int) -> list[dict]:
+    """n parameter sets drawn at random from the search space, the same for a given seed."""
+    optuna.logging.set_verbosity(optuna.logging.WARNING)
+    study = optuna.create_study(sampler=optuna.samplers.RandomSampler(seed=seed))
+    return [suggest(kind, study.ask()) for _ in range(n)]
+
+
 def objective(
     kind: Kind, train: pd.DataFrame, val: pd.DataFrame, trial: optuna.Trial
 ) -> float:
     """Validation PR-AUC of one trial's parameters."""
+    cols = features_for(kind)
     model = make_model(kind, suggest(kind, trial))
-    model.fit(train[FEATURES], train["y"])
-    scores = model.predict_proba(val[FEATURES])[:, 1]
+    model.fit(train[cols], train["y"])
+    scores = model.predict_proba(val[cols])[:, 1]
     return float(average_precision_score(val["y"], scores))
 
 
@@ -94,11 +109,16 @@ def tune(
     n_trials: int,
     n_jobs: int,
     seed: int,
+    enqueue: list[dict] | None = None,
 ) -> optuna.Study:
+    """`enqueue`: run exactly these parameter sets first (the benchmark uses it so every
+    thread count does the same work)."""
     optuna.logging.set_verbosity(optuna.logging.WARNING)
     study = optuna.create_study(
         direction="maximize", sampler=optuna.samplers.TPESampler(seed=seed)
     )
+    for params in enqueue or []:
+        study.enqueue_trial(params)
     study.optimize(
         lambda trial: objective(kind, train, val, trial),
         n_trials=n_trials,

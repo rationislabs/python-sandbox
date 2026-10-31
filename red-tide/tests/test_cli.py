@@ -43,8 +43,8 @@ def test_train_on_fixture_writes_metrics(tmp_path, monkeypatch):
         "recall_at_p50",
         "positives",
     ]
-    assert len(metrics) == 8
-    assert set(metrics.model) == {"persistence", "season", "logreg", "hgb"}
+    assert len(metrics) == 10
+    assert set(metrics.model) == {"persistence", "season", "count", "logreg", "hgb"}
     assert set(metrics.subset) == {"test", "onset"}
 
 
