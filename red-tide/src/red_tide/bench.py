@@ -28,12 +28,20 @@ EAGER = (
 )
 
 
-def bench_once(n_jobs: int, n_trials: int, seed: int, features_csv: Path) -> dict:
+def bench_once(
+    n_jobs: int,
+    n_trials: int,
+    seed: int,
+    features_csv: Path,
+    params: list[dict] | None = None,
+) -> dict:
     from red_tide import features, models
 
     parts = features.split(pd.read_csv(features_csv, parse_dates=["date"]))
     start = time.perf_counter()
-    models.tune("hgb", parts["train"], parts["val"], n_trials, n_jobs, seed)
+    models.tune(
+        "hgb", parts["train"], parts["val"], n_trials, n_jobs, seed, enqueue=params
+    )
     seconds = time.perf_counter() - start
     return {
         "gil": sys._is_gil_enabled(),
@@ -57,41 +65,54 @@ def cpu_name() -> str:
 def run_grid(
     features_csv: Path,
     threads=(1, 2, 4, 8),
-    n_trials: int = 64,
+    n_trials: int = 32,
     seed: int = 0,
+    repeats: int = 3,
     out_dir: Path = Path("results"),
 ) -> pd.DataFrame:
+    """Every cell runs the same pre-drawn parameter sets, so only threads and the GIL differ.
+
+    GIL modes alternate and the whole grid repeats, so heat and background load hit both
+    modes alike; bench.csv holds the medians, bench_runs.csv every run.
+    """
+    from red_tide import models
+
+    out_dir.mkdir(parents=True, exist_ok=True)
+    params_file = out_dir / "bench_params.json"
+    params_file.write_text(json.dumps(models.sample_params("hgb", n_trials, seed)))
     env = {**os.environ, **ONE_THREAD}
     rows = []
-    for gil in (0, 1):
+    for repeat in range(repeats):
         for n in threads:
-            cmd = [sys.executable, "-X", f"gil={gil}", "-m", "red_tide.bench"]
-            cmd += [
-                "--n-jobs",
-                str(n),
-                "--n-trials",
-                str(n_trials),
-                "--seed",
-                str(seed),
-            ]
-            cmd += ["--features", str(features_csv)]
-            out = subprocess.run(
-                cmd, capture_output=True, text=True, check=True, env=env
-            )
-            row = json.loads(out.stdout)
-            print(
-                f"GIL {'on' if row['gil'] else 'off'}, {n} threads: {row['seconds']} s"
-            )
-            rows.append(row)
-    df = pd.DataFrame(rows)
-    base = df[df["n_jobs"] == min(threads)].set_index("gil")["seconds"]
-    df["speedup"] = (df["gil"].map(base) / df["seconds"]).round(2)
-    df["cpu"] = cpu_name()
-    df["cores"] = os.cpu_count()
-    out_dir.mkdir(parents=True, exist_ok=True)
-    df.to_csv(out_dir / "bench.csv", index=False)
-    chart(df, out_dir / "bench.png")
-    return df
+            for gil in (0, 1):
+                cmd = [sys.executable, "-X", f"gil={gil}", "-m", "red_tide.bench"]
+                cmd += ["--n-jobs", str(n), "--n-trials", str(n_trials)]
+                cmd += ["--seed", str(seed), "--features", str(features_csv)]
+                cmd += ["--params", str(params_file)]
+                out = subprocess.run(
+                    cmd, capture_output=True, text=True, check=True, env=env
+                )
+                row = json.loads(out.stdout) | {"repeat": repeat}
+                mode = "on" if row["gil"] else "off"
+                print(f"run {repeat + 1}, GIL {mode}, {n} threads: {row['seconds']} s")
+                rows.append(row)
+    runs = pd.DataFrame(rows).assign(cpu=cpu_name(), cores=os.cpu_count())
+    runs.to_csv(out_dir / "bench_runs.csv", index=False)
+    summary = (
+        runs.groupby(["gil", "n_jobs"], as_index=False)
+        .agg(
+            n_trials=("n_trials", "first"),
+            runs=("seconds", "size"),
+            seconds=("seconds", "median"),
+        )
+        .assign(cpu=cpu_name(), cores=os.cpu_count())
+    )
+    summary["trials_per_s"] = (summary["n_trials"] / summary["seconds"]).round(3)
+    base = summary[summary["n_jobs"] == min(threads)].set_index("gil")["seconds"]
+    summary["speedup"] = (summary["gil"].map(base) / summary["seconds"]).round(2)
+    summary.to_csv(out_dir / "bench.csv", index=False)
+    chart(summary, out_dir / "bench.png")
+    return runs
 
 
 def chart(df: pd.DataFrame, path: Path) -> None:
@@ -115,7 +136,10 @@ def chart(df: pd.DataFrame, path: Path) -> None:
     )
     ax.set_xlabel("Optuna threads (n_jobs)")
     ax.set_ylabel("speedup vs 1 thread")
-    ax.set_title(f"Optuna + HistGradientBoosting, {df['n_trials'].iloc[0]} trials")
+    ax.set_title(
+        f"Optuna + HistGradientBoosting, the same {df['n_trials'].iloc[0]} trials"
+        f" (median of {df['runs'].iloc[0]})"
+    )
     ax.grid(alpha=0.3)
     ax.legend()
     fig.tight_layout()
@@ -152,8 +176,13 @@ def main() -> None:
     parser.add_argument("--n-trials", type=int, required=True)
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--features", type=Path, required=True)
+    parser.add_argument(
+        "--params", type=Path, help="JSON list of parameter sets to run"
+    )
     args = parser.parse_args()
-    print(json.dumps(bench_once(args.n_jobs, args.n_trials, args.seed, args.features)))
+    params = json.loads(args.params.read_text()) if args.params else None
+    row = bench_once(args.n_jobs, args.n_trials, args.seed, args.features, params)
+    print(json.dumps(row))
 
 
 if __name__ == "__main__":

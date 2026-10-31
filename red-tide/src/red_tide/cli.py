@@ -89,13 +89,13 @@ def train(n_trials: int, n_jobs: int) -> None:
     print(markdown(table))
 
 
-def bench(n_trials: int) -> None:
+def bench(n_trials: int, repeats: int) -> None:
     from red_tide import bench as harness
 
     features_csv = DATA / "features.csv"
     if not features_csv.exists():
         raise SystemExit("no data/features.csv yet: run `bloom train` first")
-    harness.run_grid(features_csv, n_trials=n_trials, out_dir=RESULTS)
+    harness.run_grid(features_csv, n_trials=n_trials, repeats=repeats, out_dir=RESULTS)
     print(harness.startup_times(out_dir=RESULTS))
 
 
@@ -143,7 +143,8 @@ def main(argv: list[str] | None = None) -> None:
     )
     p_train.add_argument("--jobs", type=int, default=4, help="Optuna threads")
     p_bench = sub.add_parser("bench", help="Optuna threads with the GIL off and on")
-    p_bench.add_argument("--trials", type=int, default=64)
+    p_bench.add_argument("--trials", type=int, default=32)
+    p_bench.add_argument("--repeats", type=int, default=3)
     sub.add_parser("report", help="print the results tables")
     args = parser.parse_args(argv)
     match args.command:
@@ -152,7 +153,7 @@ def main(argv: list[str] | None = None) -> None:
         case "train":
             train(args.trials, args.jobs)
         case "bench":
-            bench(args.trials)
+            bench(args.trials, args.repeats)
         case "report":
             report()
 
