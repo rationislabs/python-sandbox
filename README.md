@@ -6,6 +6,7 @@ tests and README. Some need Python 3.15, some run on 3.14.
 | Experiment | Python | What it shows |
 |---|---|---|
 | [free-threading](free-threading/) | 3.15t | Threads without the GIL; a PEP 810 lazy import |
+| [red-tide](red-tide/) | 3.15t | Red-tide bloom prediction; Optuna threads with the GIL on and off; lazy imports |
 
 Run one:
 

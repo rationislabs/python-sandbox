@@ -1,0 +1,3 @@
+mode,median_seconds,runs
+lazy,0.078,15
+eager,1.891,15
