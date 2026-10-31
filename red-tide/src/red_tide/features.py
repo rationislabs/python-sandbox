@@ -152,9 +152,16 @@ def build(samples: pd.DataFrame, wx: pd.DataFrame) -> pd.DataFrame:
     )
     targets["y"] = habsos.is_bloom(targets["cells"])
     targets = targets.join(_persistence(targets, samples))
-    targets = targets.merge(
-        _weather_features(wx), on=["cell_lat", "cell_lon", "date"], how="left"
+    wx_cells = [
+        weather.cell_of(lat, lon, weather.WX_DEG)
+        for lat, lon in zip(targets["cell_lat"], targets["cell_lon"])
+    ]
+    targets["wx_lat"] = [c[0] for c in wx_cells]
+    targets["wx_lon"] = [c[1] for c in wx_cells]
+    wx_features = _weather_features(wx).rename(
+        columns={"cell_lat": "wx_lat", "cell_lon": "wx_lon"}
     )
+    targets = targets.merge(wx_features, on=["wx_lat", "wx_lon", "date"], how="left")
     angle = 2 * np.pi * targets["date"].dt.day_of_year / 365.25
     targets["doy_sin"] = np.sin(angle)
     targets["doy_cos"] = np.cos(angle)

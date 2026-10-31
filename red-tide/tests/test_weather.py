@@ -69,3 +69,23 @@ def test_retries_then_raises(tmp_path, monkeypatch):
 def test_load_all_adds_cell_columns(tmp_path, fake_api):
     df = weather.load_all([CELL], date(2005, 1, 1), date(2005, 1, 3), tmp_path)
     assert (df["cell_lat"] == 27.375).all() and (df["cell_lon"] == -82.625).all()
+
+
+def test_rate_limit_waits_and_retries(tmp_path, monkeypatch):
+    calls, waits = [], []
+
+    def urlopen(url, timeout=None):
+        calls.append(url)
+        if len(calls) <= 4:  # more 429s than ordinary retries allow
+            raise urllib.error.HTTPError(url, 429, "Too Many Requests", None, None)
+        return io.BytesIO(json.dumps(PAYLOAD).encode())
+
+    monkeypatch.setattr(weather.urllib.request, "urlopen", urlopen)
+    monkeypatch.setattr(weather.time, "sleep", waits.append)
+    df = weather.fetch_cell(CELL, date(2005, 1, 1), date(2005, 1, 3), tmp_path)
+    assert len(df) == 3 and len(calls) == 5
+    assert waits.count(weather.RATE_LIMIT_WAIT_S) == 4
+
+
+def test_weather_grid_is_coarser():
+    assert weather.cell_of(27.30, -82.60, weather.WX_DEG) == (27.25, -82.75)

@@ -22,7 +22,12 @@ def fetch() -> None:
         print(f"downloading HABSOS to {raw}")
         habsos.download(raw)
     samples = habsos.load(raw)
-    cells = sorted({weather.cell_of(a, b) for a, b in zip(samples.lat, samples.lon)})
+    cells = sorted(
+        {
+            weather.cell_of(a, b, weather.WX_DEG)
+            for a, b in zip(samples.lat, samples.lon)
+        }
+    )
     print(f"{len(samples)} samples in {len(cells)} cells; fetching weather")
     end = samples["date"].max().date()
     weather.load_all(cells, WEATHER_START, end, DATA / "weather")
@@ -34,7 +39,12 @@ def build_features() -> pd.DataFrame:
     if path.exists():
         return pd.read_csv(path, parse_dates=["date"])
     samples = habsos.load(DATA / "habsos.csv")
-    cells = sorted({weather.cell_of(a, b) for a, b in zip(samples.lat, samples.lon)})
+    cells = sorted(
+        {
+            weather.cell_of(a, b, weather.WX_DEG)
+            for a, b in zip(samples.lat, samples.lon)
+        }
+    )
     end = samples["date"].max().date()
     wx = weather.load_all(cells, WEATHER_START, end, DATA / "weather")
     df = features.build(samples, wx)

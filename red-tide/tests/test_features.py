@@ -6,7 +6,7 @@ from red_tide import features, weather
 
 T = pd.Timestamp("2010-06-30")
 SITE = (27.30, -82.60)  # cell (27.375, -82.625)
-CELL = weather.cell_of(*SITE)
+WX_CELL = weather.cell_of(*SITE, weather.WX_DEG)
 
 
 def samples(*rows):
@@ -14,7 +14,7 @@ def samples(*rows):
     return pd.DataFrame(rows, columns=["date", "lat", "lon", "cells"])
 
 
-def wx(days=60, temp=None, wind_dir=None, cell=CELL):
+def wx(days=60, temp=None, wind_dir=None, cell=WX_CELL):
     dates = pd.date_range(T - pd.Timedelta(days=days - 1), T)
     df = pd.DataFrame(
         {
@@ -112,6 +112,13 @@ def test_same_cell_same_day_collapses():
     df = features.build(s, wx())
     assert len(df) == 1
     assert bool(df.iloc[0].y) is True
+
+
+def test_sample_cell_finer_than_weather_cell():
+    s = samples((T, *SITE, 0), (T, 27.10, -82.60, 0))  # same 0.5° weather cell
+    df = features.build(s, wx())
+    assert len(df) == 2
+    assert df["temp_mean"].notna().all()
 
 
 def test_season_features():
