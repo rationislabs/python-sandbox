@@ -1,0 +1,25 @@
+[project]
+name = "red-tide"
+version = "0.1.0"
+description = "Predicting Florida red tide blooms a week ahead; Optuna threads with the GIL on and off"
+authors = [
+    { name = "Rationis Labs", email = "25407388+rationislabs@users.noreply.github.com" }
+]
+requires-python = ">=3.15"
+dependencies = [
+    "matplotlib",
+    "optuna",
+    "pandas",
+    "scikit-learn",
+]
+
+[dependency-groups]
+# ruff 0.15 cannot parse `lazy import` (invalid-syntax); 0.17.1 can.
+dev = ["ruff==0.17.1", "pytest>=9.1"]
+
+[project.scripts]
+bloom = "red_tide.cli:main"
+
+[build-system]
+requires = ["uv_build>=0.13.1,<0.14.0"]
+build-backend = "uv_build"
