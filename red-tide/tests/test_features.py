@@ -100,6 +100,15 @@ def test_window_with_gaps():
     )
 
 
+def test_rain_sum_scaled_for_missing_days():
+    rain = np.full(60, 1.0)
+    rain[60 - 37 : 60 - 32] = np.nan  # 5 of the 30 window days missing
+    df = wx()
+    df["rain"] = rain
+    row = row_on(features.build(samples((T, *SITE, 0)), df), T)
+    assert row.rain_sum == pytest.approx(30.0)
+
+
 def test_upwelling_share():
     dirs = np.full(60, 90.0)
     dirs[-37:-7:2] = 330.0  # every other window day from the NNW

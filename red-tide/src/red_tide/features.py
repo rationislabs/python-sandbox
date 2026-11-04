@@ -72,7 +72,10 @@ def _window_stats(cell_wx: pd.DataFrame) -> pd.DataFrame:
             "upwelling_share": enough(
                 _upwelling(daily["wind_dir"]).rolling(**roll).mean(), daily["wind_dir"]
             ),
-            "rain_sum": enough(daily["rain"].rolling(**roll).sum(), daily["rain"]),
+            # Mean scaled to the full window, so missing days don't read as dry ones.
+            "rain_sum": enough(
+                daily["rain"].rolling(**roll).mean() * WINDOW_DAYS, daily["rain"]
+            ),
         }
     )
 
