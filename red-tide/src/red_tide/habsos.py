@@ -35,6 +35,12 @@ def load(path: Path) -> pd.DataFrame:
             "cells": pd.to_numeric(raw["CELLCOUNT"], errors="coerce"),
         }
     )
+    unreadable = df[["date", "lat", "lon"]].isna().any(axis=1)
+    if unreadable.any():
+        print(
+            f"habsos: skipped {unreadable.sum()} rows with an unreadable date or position",
+            file=sys.stderr,
+        )
     lat_min, lat_max, lon_min, lon_max = REGION
     df = df[
         df["lat"].between(lat_min, lat_max)
