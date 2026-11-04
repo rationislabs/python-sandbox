@@ -23,7 +23,8 @@ def test_recall_at_precision():
 
 
 def test_metrics_with_no_positives():
-    m = models.evaluate(np.zeros(5), np.linspace(0, 1, 5))
+    with pytest.warns(UserWarning, match="no blooms"):
+        m = models.evaluate(np.zeros(5), np.linspace(0, 1, 5))
     assert m["positives"] == 0
     assert np.isnan(m["pr_auc"]) and np.isnan(m["recall_at_p50"])
 

@@ -1,5 +1,6 @@
 """Baselines, the two scikit-learn models, metrics and Optuna tuning."""
 
+import warnings
 from typing import Literal
 
 import numpy as np
@@ -61,7 +62,9 @@ def evaluate(y, scores) -> dict:
     y = np.asarray(y).astype(int)
     positives = int(y.sum())
     if positives == 0:
-        # PR-AUC is undefined without a single bloom.
+        warnings.warn(
+            "no blooms in this subset: PR-AUC and recall are NaN", stacklevel=2
+        )
         return {"pr_auc": np.nan, "recall_at_p50": np.nan, "positives": 0}
     return {
         "pr_auc": float(average_precision_score(y, scores)),
