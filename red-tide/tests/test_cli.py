@@ -1,9 +1,11 @@
+import os
 import shutil
 import subprocess
 import sys
 from pathlib import Path
 
 import pandas as pd
+import pytest
 
 from red_tide import cli
 
@@ -68,3 +70,20 @@ def test_report_without_results_says_what_to_run(tmp_path, monkeypatch, capsys):
     monkeypatch.setattr(cli, "RESULTS", tmp_path)
     cli.main(["report"])
     assert "bloom train" in capsys.readouterr().out
+
+
+def test_features_rebuilt_when_older_than_code(tmp_path, monkeypatch):
+    monkeypatch.setattr(cli, "DATA", tmp_path)
+    cached = tmp_path / "features.csv"
+    shutil.copy(FEATURES_FIXTURE, cached)
+    os.utime(cached, (0, 0))  # older than every source file
+    built = []
+    monkeypatch.setattr(cli, "_rebuild_features", lambda: built.append(1) or "fresh")
+    assert cli.build_features() == "fresh" and built
+
+
+def test_fresh_features_are_reused(tmp_path, monkeypatch):
+    monkeypatch.setattr(cli, "DATA", tmp_path)
+    shutil.copy(FEATURES_FIXTURE, tmp_path / "features.csv")
+    monkeypatch.setattr(cli, "_rebuild_features", lambda: pytest.fail("rebuilt"))
+    assert len(cli.build_features()) > 0

@@ -36,9 +36,18 @@ def fetch() -> None:
 
 
 def build_features() -> pd.DataFrame:
+    """data/features.csv, rebuilt when HABSOS, the weather cache or the code is newer."""
     path = DATA / "features.csv"
-    if path.exists():
+    inputs = [DATA / "habsos.csv", *(DATA / "weather").glob("*.csv")]
+    inputs += Path(__file__).parent.glob("*.py")
+    newest = max((p.stat().st_mtime for p in inputs if p.exists()), default=0)
+    if path.exists() and path.stat().st_mtime >= newest:
         return pd.read_csv(path, parse_dates=["date"])
+    return _rebuild_features()
+
+
+def _rebuild_features() -> pd.DataFrame:
+    path = DATA / "features.csv"
     samples = habsos.load(DATA / "habsos.csv")
     cells = sorted(
         {
