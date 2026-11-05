@@ -82,6 +82,22 @@ def test_features_rebuilt_when_older_than_code(tmp_path, monkeypatch):
     assert cli.build_features() == "fresh" and built
 
 
+def test_bench_rebuilds_stale_features_first(tmp_path, monkeypatch):
+    from red_tide import bench as harness
+
+    monkeypatch.setattr(cli, "DATA", tmp_path)
+    monkeypatch.setattr(cli, "RESULTS", tmp_path / "results")
+    cached = tmp_path / "features.csv"
+    shutil.copy(FEATURES_FIXTURE, cached)
+    os.utime(cached, (0, 0))  # older than every source file
+    calls = []
+    monkeypatch.setattr(cli, "_rebuild_features", lambda: calls.append("rebuild"))
+    monkeypatch.setattr(harness, "run_grid", lambda *a, **k: calls.append("grid"))
+    monkeypatch.setattr(harness, "startup_times", lambda **k: {})
+    cli.bench(n_trials=1, repeats=1)
+    assert calls == ["rebuild", "grid"]
+
+
 def test_fresh_features_are_reused(tmp_path, monkeypatch):
     monkeypatch.setattr(cli, "DATA", tmp_path)
     shutil.copy(FEATURES_FIXTURE, tmp_path / "features.csv")

@@ -104,6 +104,7 @@ def bench(n_trials: int, repeats: int) -> None:
     features_csv = DATA / "features.csv"
     if not features_csv.exists():
         raise SystemExit("no data/features.csv yet: run `bloom train` first")
+    build_features()  # rebuilds the file if data or code changed since
     harness.run_grid(features_csv, n_trials=n_trials, repeats=repeats, out_dir=RESULTS)
     print(harness.startup_times(out_dir=RESULTS))
 
