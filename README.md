@@ -18,3 +18,5 @@ uv run pytest
 Start a new one: `uv init --package --python 3.14 <name>`, add `ruff` and `pytest` as dev
 dependencies (`uv add --dev ruff pytest`), and a row to the table above. CI finds every folder
 with a `pyproject.toml` and runs its lint and tests.
+
+Every project here was built with AI assistance.
