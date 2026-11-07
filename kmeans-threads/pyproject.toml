@@ -1,0 +1,20 @@
+[project]
+name = "kmeans-threads"
+version = "0.1.0"
+description = "One k-means five ways on Python 3.15t, with the GIL on and off"
+authors = [
+    { name = "Rationis Labs", email = "25407388+rationislabs@users.noreply.github.com" }
+]
+requires-python = ">=3.15"
+dependencies = ["numpy>=2.5.4"]
+
+[dependency-groups]
+# Same ruff pin as the other experiments (0.15 cannot parse `lazy import`).
+dev = ["ruff==0.17.1", "pytest>=9.1"]
+
+[project.scripts]
+kmeans = "kmeans_threads.cli:main"
+
+[build-system]
+requires = ["uv_build>=0.13.1,<0.14.0"]
+build-backend = "uv_build"
