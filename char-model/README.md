@@ -15,14 +15,15 @@ minutes, on text from this account's public READMEs.
 
 ## The corpus
 
-`data/corpus.txt`, 91,284 characters (about 93 KB): the README of every public repo here and the
-anastasis website pages with the HTML stripped, read from each repo's last commit, never from
+`data/corpus.txt`, 91,284 characters (about 93 KB): the READMEs of ten public repos here (all but
+the coursework repo) and the anastasis website pages with the HTML stripped, read from each repo's last commit, never from
 uncommitted files. That is **small for a language model**, so training keeps the weights with
 the best validation score, not the last ones. The vocabulary is the 110 characters seen at least
 3 times, plus one symbol for everything rarer.
 
-The last 10% is validation. It happens to be rust-sandbox's finance README, full of terminal
-box-drawing, which is unlike most of the training text: both models score high on it.
+The last 10% is validation: the READMEs of rust-sandbox's finance, logline and todo projects,
+with terminal screenshots and command lines unlike most of the training text, so both models
+score high on it.
 
 ## Results
 
@@ -36,11 +37,12 @@ Validation bits per character (lower is better):
 
 The MLP beats the bigram by 0.30 bits per character, and only just. It learns the training text
 fast and then memorises it: training ends at 1.1 bits per character while validation, after its
-best at step 3,000, climbs back to 5.2. The first run, with a learning rate of 3e-3, peaked at
-4.29; a learning rate of 1e-3 gave the 4.04 above (`data/model.npz`). 20,000 steps took about 110 s on
-an AMD Ryzen 5 2500U (4 cores; numpy's BLAS uses all 8 threads).
+best at step 3,000, climbs back to 5.2. A first run with a learning rate of 3e-3 peaked at 4.29;
+the default is now 1e-3, which gave the 4.04 above (`data/model.npz`). 20,000 steps took about 110 s on
+an AMD Ryzen 5 2500U (4 cores, 8 threads).
 
-Samples from `data/model.npz`, seed 1:
+The first 300 characters of `char-model sample --model data/model.npz --seed 1` at three
+temperatures:
 
 Temperature 0.5:
 
@@ -48,7 +50,7 @@ Temperature 0.5:
 on whed: Anastasis refists envice prest soons, replica and heally.
 
 anastases stare replica nather replica dof a the project came.
-Anastasis reads the linger and service rens a longles ivery request mame the sach the dises nands ald vollow a chen (eplanas and docalasts as the pring parstos 3 with   
+Anastasis reads the linger and service rens a longles ivery request mame the sach the dises nands ald vollow a chen (eplanas and docalasts as the pring parstos 3 with
 ```
 
 Temperature 0.8:
@@ -85,12 +87,13 @@ shape of Markdown, not much more.
 ```sh
 cd char-model
 uv run char-model corpus                      # rebuild data/corpus.txt from the public repos
-uv run char-model train --lr-max 1e-3         # bigram and MLP, about 2 minutes
+uv run char-model train                       # bigram and MLP, about 2 minutes
 uv run char-model train --corpus ~/notes.txt  # any other text: everything goes to runs/ only
 uv run char-model sample --n 400 --temp 0.8 --seed 1
 uv run pytest
 ```
 
-`train` writes `runs/<name>/` (weights, samples, metrics). Only a run on the default corpus also
+`train` writes `runs/<name>/` (weights, samples, metrics); `--name` is a plain folder name and an
+existing folder is refused before training starts. Only a run on the default corpus also
 updates `data/model.npz`; a `--corpus` run never leaves `runs/`, which git ignores. `sample` uses
 the newest run, else `data/model.npz`, so it works right after a clone.

@@ -91,3 +91,29 @@ def test_sample_rejects_nonpositive_temp_and_n(paths):
         with pytest.raises(SystemExit) as e:
             cli.main(["sample", *args])
         assert e.value.code == 2
+
+
+@pytest.mark.parametrize("name", ["../data", "/tmp/elsewhere", "a/b", ".."])
+def test_run_name_must_stay_inside_runs(paths, tmp_path, name):
+    custom = tmp_path / "notes.txt"
+    custom.write_text(TEXT)
+    with pytest.raises(SystemExit) as e:
+        cli.main(["train", "--corpus", str(custom), "--name", name, *FAST])
+    assert e.value.code == 2
+    assert not cli.DATA.exists() or not any(cli.DATA.iterdir())
+
+
+def test_existing_run_folder_is_refused_before_training(paths, tmp_path, monkeypatch):
+    default_corpus()
+    (cli.RUNS / "taken").mkdir(parents=True)
+
+    def boom(*a, **k):
+        raise AssertionError("trained although the run folder exists")
+
+    monkeypatch.setattr(cli.train, "train", boom)
+    with pytest.raises(SystemExit, match="taken"):
+        cli.main(["train", "--name", "taken", *FAST])
+
+
+def test_default_learning_rate_is_the_published_one():
+    assert cli.train.LR_MAX == 1e-3

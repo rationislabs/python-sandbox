@@ -27,6 +27,13 @@ def _positive(kind):
     return parse
 
 
+def _run_name(s: str) -> str:
+    """One folder name inside runs/: no path, so a run can never write anywhere else."""
+    if Path(s).name != s or s in ("", ".", ".."):
+        raise argparse.ArgumentTypeError(f"must be a plain folder name, got {s}")
+    return s
+
+
 def _corpus(repos: Path) -> None:
     out = corpus.collect(repos)
     CORPUS.parent.mkdir(parents=True, exist_ok=True)
@@ -41,6 +48,9 @@ def _train(a: argparse.Namespace) -> None:
     source = CORPUS if default else Path(a.corpus)
     if default and not source.exists():
         raise SystemExit("no data/corpus.txt: run `char-model corpus` first")
+    run = RUNS / (a.name or time.strftime("%Y%m%d-%H%M%S"))
+    if run.exists():
+        raise SystemExit(f"{run} already exists: pick another --name")
     raw = source.read_text(encoding="utf-8")
     vocab = text.build_vocab(raw)
     ids = text.encode(raw, vocab)
@@ -67,7 +77,6 @@ def _train(a: argparse.Namespace) -> None:
     base = bigram.bpc(bigram.fit(ids[:k], len(vocab)), ids, k, len(ids))
     print(f"{len(raw)} characters, vocabulary {len(vocab)}")
     print(f"validation bits per char: bigram {base:.3f}, MLP {res.best_val_bpc:.3f}")
-    run = RUNS / (a.name or time.strftime("%Y%m%d-%H%M%S"))
     run.mkdir(parents=True)
     start = ids[: a.context]
     mlp.save(run / "model.npz", res.params, vocab, start)
@@ -134,7 +143,9 @@ def main(argv: list[str] | None = None) -> None:
     t.add_argument("--context", type=_positive(int), default=train.CONTEXT)
     t.add_argument("--embed", type=_positive(int), default=train.EMBED)
     t.add_argument("--hidden", type=_positive(int), default=train.HIDDEN)
-    t.add_argument("--name", help="run folder name (default: the date and time)")
+    t.add_argument(
+        "--name", type=_run_name, help="run folder name (default: the date and time)"
+    )
     s = sub.add_parser("sample", help="print text from the newest model")
     s.add_argument(
         "--model", help="a model.npz (default: newest in runs/, else data/model.npz)"

@@ -25,9 +25,9 @@ def quiet(*_):
 
 
 def test_lr_schedule_is_cosine():
-    assert train.lr_at(0, 100) == pytest.approx(3e-3)
+    assert train.lr_at(0, 100) == pytest.approx(1e-3)
     assert train.lr_at(100, 100) == pytest.approx(3e-5)
-    assert train.lr_at(50, 100) == pytest.approx((3e-3 + 3e-5) / 2)
+    assert train.lr_at(50, 100) == pytest.approx((1e-3 + 3e-5) / 2)
 
 
 def test_tiny_model_overfits_200_chars_far_below_bigram():
