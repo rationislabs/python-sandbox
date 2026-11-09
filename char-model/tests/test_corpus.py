@@ -94,3 +94,11 @@ def test_missing_repo_or_path_raises(tmp_path):
     make_repo(tmp_path / "anastasis", {"README.md": "x"})
     with pytest.raises(RuntimeError, match="docs/index.html"):
         corpus.collect(tmp_path, {"anastasis": ["docs/index.html"]})
+
+
+def test_collect_logs_kb_per_repo(tmp_path):
+    make_repo(tmp_path / "a", {"README.md": "x" * 1500})
+    make_repo(tmp_path / "b", {"README.md": "y" * 500})
+    lines = []
+    corpus.collect(tmp_path, {"a": ["README.md"], "b": ["README.md"]}, log=lines.append)
+    assert lines == ["a: 1.5 KB", "b: 0.5 KB"]

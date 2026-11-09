@@ -48,6 +48,7 @@ def test_default_corpus_also_writes_data_model(paths):
     assert m["mlp_val_bpc"] > 0 and m["bigram_val_bpc"] > 0 and m["steps"] == 20
 
 
+@pytest.mark.filterwarnings("error")
 def test_train_short_corpus_exits_cleanly(paths, tmp_path):
     short = tmp_path / "s.txt"
     short.write_text("abcabc")
@@ -117,3 +118,26 @@ def test_existing_run_folder_is_refused_before_training(paths, tmp_path, monkeyp
 
 def test_default_learning_rate_is_the_published_one():
     assert cli.train.LR_MAX == 1e-3
+
+
+def test_train_prints_baseline_before_training(paths, capsys, monkeypatch):
+    default_corpus()
+    real = cli.train.train
+
+    def spy(*a, **k):
+        out = capsys.readouterr().out
+        assert "vocabulary" in out and "bigram" in out and "MLP" not in out
+        return real(*a, **k)
+
+    monkeypatch.setattr(cli.train, "train", spy)
+    cli.main(["train", *FAST])
+    assert "MLP" in capsys.readouterr().out
+
+
+@pytest.mark.filterwarnings("ignore::RuntimeWarning")
+def test_diverged_training_exits_cleanly(paths):
+    default_corpus()
+    with pytest.raises(SystemExit, match="validation never finite"):
+        cli.main(["train", *FAST, "--lr-max", "1e30"])
+    assert not cli.RUNS.exists() or not any(cli.RUNS.iterdir())
+    assert not (cli.DATA / "model.npz").exists()

@@ -39,7 +39,8 @@ def _corpus(repos: Path) -> None:
     CORPUS.parent.mkdir(parents=True, exist_ok=True)
     CORPUS.write_text(out, encoding="utf-8")
     print(
-        f"wrote {CORPUS}: {len(out.encode()) / 1000:.0f} KB from {len(corpus.SOURCES)} repos"
+        f"wrote {CORPUS}: {len(out.encode()) / 1000:.0f} KB in all from "
+        f"{len(corpus.SOURCES)} repos"
     )
 
 
@@ -54,6 +55,10 @@ def _train(a: argparse.Namespace) -> None:
     raw = source.read_text(encoding="utf-8")
     vocab = text.build_vocab(raw)
     ids = text.encode(raw, vocab)
+    try:
+        train.check_length(len(ids), a.context)
+    except ValueError as e:
+        raise SystemExit(str(e)) from None
     k = text.split_point(len(ids))
     numbers = {
         "context": a.context,
@@ -63,6 +68,9 @@ def _train(a: argparse.Namespace) -> None:
         "lr_max": a.lr_max,
         "lr_min": a.lr_min,
     }
+    base = bigram.bpc(bigram.fit(ids[:k], len(vocab)), ids, k, len(ids))
+    print(f"{len(raw)} characters, vocabulary {len(vocab)}")
+    print(f"validation bits per char: bigram {base:.3f}")
     try:
         res = train.train(
             ids,
@@ -74,9 +82,7 @@ def _train(a: argparse.Namespace) -> None:
         )
     except ValueError as e:
         raise SystemExit(str(e)) from None
-    base = bigram.bpc(bigram.fit(ids[:k], len(vocab)), ids, k, len(ids))
-    print(f"{len(raw)} characters, vocabulary {len(vocab)}")
-    print(f"validation bits per char: bigram {base:.3f}, MLP {res.best_val_bpc:.3f}")
+    print(f"validation bits per char: MLP {res.best_val_bpc:.3f}")
     run.mkdir(parents=True)
     start = ids[: a.context]
     mlp.save(run / "model.npz", res.params, vocab, start)

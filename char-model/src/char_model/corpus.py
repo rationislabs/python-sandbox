@@ -3,6 +3,7 @@
 import html
 import re
 import subprocess
+from collections.abc import Callable
 from html.parser import HTMLParser
 from pathlib import Path, PurePosixPath
 
@@ -65,8 +66,13 @@ def _git(repo: Path, *args: str) -> str:
     return r.stdout
 
 
-def collect(root: Path, sources: dict[str, list[str]] = SOURCES) -> str:
-    """Every listed file at each repo's HEAD, joined by blank lines. Never reads a working tree."""
+def collect(
+    root: Path,
+    sources: dict[str, list[str]] = SOURCES,
+    log: Callable[[str], None] = print,
+) -> str:
+    """Every listed file at each repo's HEAD, joined by blank lines, with each repo's KB logged.
+    Never reads a working tree."""
     docs = []
     for repo, patterns in sources.items():
         path = root / repo
@@ -81,7 +87,10 @@ def collect(root: Path, sources: dict[str, list[str]] = SOURCES) -> str:
             if not hits:
                 raise RuntimeError(f"{repo}: nothing matches {pattern} at HEAD")
             chosen |= hits
+        size = 0
         for f in sorted(chosen):
             body = _git(path, "show", f"HEAD:{f}")
             docs.append(strip_html(body) if f.endswith(".html") else body)
+            size += len(docs[-1].strip().encode())
+        log(f"{repo}: {size / 1000:.1f} KB")
     return "\n\n".join(d.strip() for d in docs) + "\n"

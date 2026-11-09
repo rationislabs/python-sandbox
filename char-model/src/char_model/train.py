@@ -27,6 +27,17 @@ def lr_at(
     return lr_min + 0.5 * (lr_max - lr_min) * (1 + math.cos(math.pi * step / steps))
 
 
+def check_length(n: int, context: int = CONTEXT) -> None:
+    """`ValueError` unless `n` characters leave a training part longer than `context` and a
+    validation part."""
+    n_train = split_point(n)
+    if n_train <= context or n_train >= n:
+        raise ValueError(
+            f"corpus too short: {n} characters, need more than {context} for training "
+            "plus some for validation"
+        )
+
+
 @dataclass
 class TrainResult:
     params: mlp.Params
@@ -54,12 +65,8 @@ def train(
     log: Callable[..., None] = print,
 ) -> TrainResult:
     n = len(ids)
+    check_length(n, context)
     n_train = split_point(n)
-    if n_train <= context or n_train >= n:
-        raise ValueError(
-            f"corpus too short: {n} characters, need more than {context} for training "
-            "plus some for validation"
-        )
     Xt, Yt = windows(ids, context, n_train, context)
     Xv, Yv = windows(ids, n_train, n, context)
     rng = np.random.default_rng(seed)
@@ -89,4 +96,9 @@ def train(
                 f"step {done:>6}  train {tr:.3f}  val {val:.3f}  lr {lr:.1e}  "
                 f"{perf_counter() - t0:.0f}s{mark}"
             )
+    if not math.isfinite(best):
+        raise ValueError(
+            f"validation never finite in {steps} steps (training diverged): "
+            "try a lower --lr-max"
+        )
     return TrainResult(best_params, best, best_step, history, perf_counter() - t0)

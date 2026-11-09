@@ -94,6 +94,7 @@ uv run pytest
 ```
 
 `train` writes `runs/<name>/` (weights, samples, metrics); `--name` is a plain folder name and an
-existing folder is refused before training starts. Only a run on the default corpus also
+existing folder is refused before training starts. A run that diverges (validation never
+finite, say from too high a `--lr-max`) stops with an error and writes nothing. Only a run on the default corpus also
 updates `data/model.npz`; a `--corpus` run never leaves `runs/`, which git ignores. `sample` uses
 the newest run, else `data/model.npz`, so it works right after a clone.

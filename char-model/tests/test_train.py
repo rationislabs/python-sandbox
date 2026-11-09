@@ -82,3 +82,11 @@ def test_save_load_roundtrip(tmp_path):
         and np.array_equal(st, start)
         and all(np.array_equal(p[key], q[key]) for key in p)
     )
+
+
+@pytest.mark.filterwarnings("ignore::RuntimeWarning")
+def test_never_finite_validation_raises():
+    with pytest.raises(ValueError, match="validation never finite"):
+        train.train(
+            ids, len(vocab), steps=40, seed=0, **{**SMALL, "lr_max": 1e30}, log=quiet
+        )
