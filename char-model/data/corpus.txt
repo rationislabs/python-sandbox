@@ -1,0 +1,2100 @@
+# ai-language-tutor
+
+Learn **German, Hungarian, French and Italian** the way a child does: listen to short stories
+you almost understand, read along, tap any word, and fill gaps in sentences you hear. Words
+come back for review on a spaced-repetition schedule (FSRS). An installable web app that works
+offline; optional AI stories with your own key. A Rationis Labs project.
+
+```
+content/  stories + word lists (YAML)  ──►  tools/ (Python)  ──►  web/public/content/*.json + audio/*.mp3
+                                            vocabulary check · Tatoeba gaps · Piper audio
+web/      Svelte 5 PWA  ──  progress on the device (IndexedDB)  ──  AI: browser ─► your provider
+```
+
+## How a session works
+
+1. **Listen**: the story plays with the text hidden; each sentence shows a picture hint.
+2. **Listen and read**: tap a word for its meaning, or a sentence for an explanation, shown and
+   spoken in your help language (English or German, per language you learn).
+3. **Gaps**: hear a sentence, fill the missing word by typing or by choosing from four. An
+   answer that differs only in accents (o/ó/ö/ő, ß/ss) counts as "almost".
+4. Words you met come back in later sessions, in new sentences.
+
+## The library
+
+| Language | Stories | Level |
+|---|---|---|
+| German | 40 | A2 → B1 (the 1,000 most frequent words count as known) |
+| Hungarian | 40 | A1 → A2 |
+| French | 15 | A1, from zero |
+| Italian | 15 | A1, from zero |
+
+Every story uses only words you already know plus at most 6 new ones, each at least twice.
+`python -m tutortools check` enforces it; the build fails otherwise.
+
+## Your own AI (optional)
+
+Settings → *Your own AI*: OpenAI-compatible (any address), Anthropic, or Google Gemini (its
+free tier works). The app asks for a short story using the words you know plus the next new
+ones, and checks it; more than 15 % unknown words → it asks once more, then marks the story.
+**Your key and the words you know go straight from your browser to your provider. Nothing
+passes through us.** The key stays in this tab unless you tick "Remember on this device", and
+is never part of a progress export.
+
+A model on your own computer works too: an address such as `http://localhost:11434/v1`
+(Ollama) or `http://127.0.0.1:1234/v1` (LM Studio). The server must allow requests from this
+site's address (for Ollama, `OLLAMA_ORIGINS`), and Chrome asks once for permission to reach
+your local network. Safari may refuse such an address from an `https://` page. Any other
+address must be `https://`.
+
+## Run it locally
+
+```bash
+# tools (Python 3.12, uv)
+cd tools && uv sync
+uv run pytest
+uv run python -m tutortools check                 # the vocabulary rule
+uv run python -m tutortools ranks hu              # fill frequency ranks (network, cached)
+uv sync --group audio && uv run python -m tutortools build   # gaps, audio, content JSON (network, ffmpeg)
+uv run python -m tutortools build --no-audio      # quick try (~5 minutes): the device's voice reads aloud
+
+# web (Node 22: `nvm install 22` once, then `nvm use` reads .nvmrc)
+cd web && npm install
+npm test && npm run check
+npm run dev        # http://127.0.0.1:5173
+```
+
+## Try it on your phone, privately
+
+Offline use needs HTTPS. [Tailscale](https://tailscale.com) gives it to your own devices only:
+
+```bash
+cd tools && uv run python -m tutortools build      # once: content and audio into web/public
+cd web && npm run build && npx vite preview --port 4173
+sudo tailscale serve --bg --https=8443 http://127.0.0.1:4173   # https://<machine>.<tailnet>.ts.net:8443
+sudo tailscale serve --https=8443 off                           # stop serving
+```
+
+Port 8443 leaves anything already served at the machine's root address alone; avoid
+`tailscale serve reset`, which removes every served address.
+
+## One-time setup (free plans only)
+
+1. A Cloudflare account; create a Pages project (direct upload), and an API token that may
+   edit Pages.
+2. In the GitHub repo: secrets `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID`; variable
+   `CLOUDFLARE_PROJECT` (the project name). Deploy stays off until it is set.
+3. Push to `main`: the first build renders all audio (about an hour); later builds only what
+   changed.
+4. Ask a native speaker to read the Hungarian (and French and Italian) stories.
+5. On your phone: open the site, **install it** (Chrome on Android offers "Install app"; on
+   iPhone, add it to the home screen, or Safari deletes the data of sites unused for 7 days),
+   and try a story offline.
+
+## Credits and licences
+
+- Code: [MIT](LICENSE). Everything in `content/`: [CC BY-SA 4.0](content/LICENSE), except
+  material credited below under its own licence.
+- Stories, glosses and explanations © Rationis Labs, licensed CC BY-SA 4.0.
+- Word frequencies: [FrequencyWords](https://github.com/hermitdave/FrequencyWords) by Hermit
+  Dave (OpenSubtitles 2018), CC BY-SA 4.0; `content/words/*.yaml` is derived from it and is
+  CC BY-SA 4.0 as well.
+- Gap sentences: [Tatoeba](https://tatoeba.org), CC BY 2.0 FR; recordings only under CC BY
+  4.0, CC BY-SA 4.0 or CC0, each credited in the app.
+- Voices: [Piper](https://github.com/OHF-Voice/piper1-gpl) (used only at build time).
+  thorsten, anna, berta, imre: CC0; siwis (SIWIS French Speech Synthesis Database)
+  and serena: CC BY 4.0; pierre (UPMC, [upmc-pierre-data](https://github.com/marytts/upmc-pierre-data)):
+  CC BY-SA 4.0.
+
+Contact: [github.com/rationislabs](https://github.com/rationislabs)
+
+This project was built with AI assistance.
+
+# Anastasis
+
+*Anastasis* (ἀνάστασις, Greek for "resurrection") is a container orchestrator for homelabs
+and small servers: what dies comes back to life. It runs your services on rootless Podman and keeps
+them at the size you asked for, without a root daemon and without the weight of a full cluster
+platform.
+
+Website: [rationislabs.github.io/anastasis](https://rationislabs.github.io/anastasis/).
+
+## What it fixes
+
+| Problem with plain container engines | What Anastasis does |
+|---|---|
+| A crashed container stays dead | Replaces dead or unhealthy replicas, with crash backoff |
+| Scaling is manual and the load balancer does not follow | `anastasis scale`, plus autoscaling on in-flight requests and CPU, with a built-in HTTP load balancer that tracks every replica |
+| One root daemon is a security risk and a single point of failure | Rootless Podman under your user; if Anastasis itself stops, containers keep running and are adopted on restart |
+| Full cluster platforms are too heavy for one machine | One binary, one JSON project file, nothing else to install |
+
+## Features
+
+- **Replicas and self-healing** with crash backoff (1s doubling to 5m).
+- **Zero-downtime rolling updates** (start-first by default) with pause or rollback on failure.
+- **HTTP load balancer** per exposed service, with sticky sessions and connection draining.
+- **Autoscaling** on concurrent requests and CPU, with a 5-minute scale-down window.
+- **JSON project files** (`compose.json`, Compose-shaped); YAML Compose files load too.
+
+## Status
+
+Built and tested on a single host, with autoscaling: unit tests, integration tests on Docker, and
+CI on rootless Podman. Anastasis uses only the Go standard library: its Podman API client, project
+file loader and YAML reader are its own.
+
+## Install
+
+Requirements: Linux, rootless Podman 4+, and a systemd user session.
+
+```sh
+go build -o ~/.local/bin/anastasis ./cmd/anastasis
+systemctl --user enable --now podman.socket
+mkdir -p ~/.config/systemd/user && cp contrib/anastasis.service ~/.config/systemd/user/
+systemctl --user enable --now anastasis
+sudo loginctl enable-linger "$USER"   # keep running after logout; also needed for healthchecks
+```
+
+## Quick start
+
+`compose.json`:
+
+```json
+{
+  "name": "weather",
+  "services": {
+    "web": {
+      "image": "ghcr.io/rationislabs/weather-live-dashboard:1.4.0",
+      "healthcheck": {
+        "test": ["CMD", "wget", "-qO-", "http://localhost:8080/health"],
+        "interval": "5s"
+      },
+      "deploy": {
+        "replicas": 3,
+        "update_config": { "parallelism": 1, "delay": "5s" }
+      },
+      "x-anastasis": {
+        "expose": "8000:8080",
+        "sticky": true
+      }
+    }
+  }
+}
+```
+
+`expose` puts Anastasis's load balancer on host port 8000, forwarding to container port 8080.
+`sticky` pins each browser to one replica. JSON is the default format; existing YAML Compose
+files (`compose.yaml`) work too.
+
+```sh
+anastasis up                          # reads compose.json; waits until every service is ready
+anastasis status
+anastasis scale weather web=5         # lasts until the next `anastasis up`
+anastasis rollout restart weather web # roll every replica, re-pull the image
+anastasis down weather --volumes
+```
+
+## How it behaves
+
+- **Self-healing:** exited or unhealthy replicas are replaced. A replica that
+  dies within 30s of starting puts the service in crash backoff (1s doubling
+  to 5m). Replicas that died while Anastasis was not running (a reboot) are
+  replaced without backoff.
+- **Hung replicas:** a replica whose healthcheck gives no result for
+  `interval` + `timeout` stops getting traffic, and is replaced after
+  `retries` such periods. Podman 4.9 never times out a hung check itself.
+- **Rolling updates** start when a service's config changes. Anastasis defaults
+  to `order: start-first`, unlike Compose's `stop-first`, so a single-replica
+  service updates without downtime. If new replicas fail within `monitor`
+  (default 30s), `failure_action` decides: `pause` (default), `rollback` or
+  `continue`.
+- **Load balancer:** HTTP only, round-robin over ready replicas. Replicas
+  without a healthcheck count as ready as soon as they start.
+- **Sticky sessions** keep a browser on one replica. Apps that keep sessions
+  in memory (NiceGUI, Reflex) need this; if that replica dies, the user's
+  session is lost.
+- **Stateless services only scale.** Services that keep state in a local
+  volume (SQLite, files) must stay at one replica.
+- **Keep state in named volumes or bind mounts.** Anonymous volumes (an
+  image's `VOLUME`, such as redis `/data`, or a `volumes:` entry without a
+  source) belong to one replica and are deleted with it, so every
+  replacement, rollout or scale-down starts them empty. Compose keeps them
+  across a recreate; Anastasis does not.
+- `ports:` still works for single-replica services, which then update with
+  `stop-first` (short outage). Use `x-anastasis.expose` instead to scale and to
+  update without downtime.
+
+## Autoscaling
+
+```json
+{
+  "services": {
+    "web": {
+      "image": "ghcr.io/rationislabs/weather-live-dashboard:1.4.0",
+      "deploy": {
+        "replicas": 2,
+        "resources": { "limits": { "cpus": "0.5" } }
+      },
+      "x-anastasis": {
+        "expose": "8000:8080",
+        "autoscale": { "min": 1, "max": 6, "inflight": 10, "cpu": 70 }
+      }
+    }
+  }
+}
+```
+
+`replicas` is the starting count (and the floor when `min` is omitted), `inflight` the target
+concurrent requests per replica, `cpu` the target percent of the CPU limit per replica.
+
+- Anastasis computes a replica count from each signal (`ceil(ready × observed / target)`) and uses
+  the higher one, within `[min, max]`.
+- Scaling up starts within about 15 seconds, plus the time new replicas take to start and become
+  ready. Scaling down waits until the load has been lower
+  for 5 minutes, then removes one replica per minute.
+- Missing data never scales down. `cpu` needs `deploy.resources.limits.cpus`; on rootless Podman
+  it also needs cgroup v2 (on cgroup v1 the CPU signal is unavailable and `anastasis status` says so).
+- `inflight` needs `x-anastasis.expose`: only Anastasis's load balancer counts requests.
+- A WebSocket or server-sent-events connection counts as in flight for as long as it stays open,
+  so a live dashboard with open tabs never scales down on `inflight`. Scale such apps on `cpu`.
+- `anastasis scale` refuses autoscaled services; change `min`/`max` in the file and run `anastasis up`.
+- `anastasis status` shows the decision in the `AUTO` column, for example
+  `2→4 (inflight 14.0/10, cpu 55/70)`.
+
+## Not supported
+
+`build:`, `network_mode:`, custom networks, `restart: "no"` and
+`restart: on-failure` (Anastasis keeps every service running; run one-shot jobs
+with `podman run`), bind `propagation`, volume `nocopy`/`subpath`, tmpfs
+options, Swarm-only `deploy` keys
+(`placement`, `mode: global`, `endpoint_mode`, `rollback_config`,
+`max_failure_ratio`), and any service key not listed in
+`serviceKeys` in `internal/config/service.go`. Anastasis rejects these with an error instead of
+ignoring them.
+
+`container_name:` and `depends_on:` are accepted and ignored: Anastasis names
+replicas itself and retries until dependencies are up. `depends_on:` must still
+name services of the project.
+
+## Gotchas
+
+- **One project name, one directory.** A project name registered from one
+  directory cannot be `up`-ed from another (two `docker/compose.json` stacks
+  would both be named `docker`). Give them different top-level `name` keys, or
+  run `anastasis down` before moving a project. Another file in the same
+  directory is the same project, so `compose.yaml` can become `compose.json`
+  with a plain `anastasis up`.
+- **`down --volumes`** removes the project's named volumes, never `external:` ones. A volume
+  belongs to one project: `up` refuses a project that names another project's volume. To share
+  one, mark it `external: true` in both projects.
+- **A project file is trusted like a script.** Bind mounts of any host path and `cap_add` are
+  passed to Podman as written; rootless Podman limits them to what your user can do, but a bind
+  of your home directory can still read your files. `privileged`, `devices` and `pid` are
+  rejected.
+
+- **Healthchecks need a systemd user session** on rootless Podman. Without
+  `loginctl enable-linger`, replicas stay `starting` and never get traffic;
+  `anastasis status` warns about this.
+- **Ports below 1024** need `sysctl net.ipv4.ip_unprivileged_port_start=80`
+  (or lower). Anastasis does not change it for you.
+- **Use fully qualified image names** (`docker.io/library/nginx`), because
+  Podman may refuse to guess the registry for short names.
+
+## Development
+
+```sh
+go test ./...
+# integration tests against Docker (or rootless Podman: leave the variables unset)
+ANASTASIS_TEST_RUNTIME=/var/run/docker.sock ANASTASIS_TEST_CLI=docker \
+  go test -tags integration -count=1 -timeout 15m ./integration/
+```
+
+## Credits
+
+Anastasis is written from scratch and uses only the Go standard library. It runs containers
+through [Podman](https://podman.io) (Apache-2.0), a separate program you install, over Podman's
+Docker-compatible API. Project files follow the [Compose specification](https://compose-spec.io)
+shape; the loader that reads them is Anastasis's own.
+
+## License
+
+Apache License 2.0; see [LICENSE](LICENSE).
+
+This project was built with AI assistance.
+
+Guide: Anastasis
+
+Skip to content
+
+Guide
+Reference
+GitHub
+
+Guide
+From an empty machine to services that heal, scale and update themselves.
+
+Install
+A first project
+How up converges
+Status and scaling
+Self-healing
+Rolling updates and rollback
+Autoscaling
+Volumes and data
+Upgrading Anastasis
+Troubleshooting
+
+Install
+You need Linux, rootless Podman 4 or newer, a systemd user session, and Go 1.27.3 or newer to
+build the binary. Anastasis has no other dependencies.
+GOBIN=~/.local/bin go install github.com/rationislabs/anastasis/cmd/anastasis@latest
+systemctl --user enable --now podman.socket
+Run Anastasis as a systemd user service, so it starts with your session and restarts if it
+stops. Save this unit as ~/.config/systemd/user/anastasis.service (it is
+contrib/anastasis.service in the repository):
+[Unit]
+Description=anastasis container orchestrator
+Requires=podman.socket
+After=podman.socket
+
+[Service]
+ExecStart=%h/.local/bin/anastasis serve
+Restart=always
+RestartSec=1
+# A user unit: it runs as you, so User= does not apply. No ProtectHome or
+# ProtectSystem: anastasis reads compose files and creates bind-mount
+# sources wherever a project keeps them.
+NoNewPrivileges=yes
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+LockPersonality=yes
+RestrictNamespaces=yes
+MemoryDenyWriteExecute=yes
+SystemCallArchitectures=native
+
+[Install]
+WantedBy=default.target
+
+systemctl --user enable --now anastasis
+sudo loginctl enable-linger "$USER"   # keep running after logout; healthchecks need it too
+If Anastasis stops, your containers keep running. When it starts again it adopts them instead
+of starting new ones.
+
+A first project
+A project is a directory with a compose.json. It follows the shape of the
+Compose specification, plus an x-anastasis block
+for what Compose has no words for:
+{
+"name": "weather",
+"services": {
+"web": {
+"image": "ghcr.io/rationislabs/weather-live-dashboard:1.4.0",
+"healthcheck": {
+"test": ["CMD", "wget", "-qO-", "http://localhost:8080/health"],
+"interval": "5s"
+},
+"deploy": {
+"replicas": 3,
+"update_config": { "parallelism": 1, "delay": "5s" }
+},
+"x-anastasis": {
+"expose": "8000:8080",
+"sticky": true
+}
+}
+}
+}
+
+expose puts the load balancer on host port 8000, forwarding to container port
+8080 of every ready replica.
+sticky keeps each browser on one replica. Apps that keep sessions in memory need
+this; if that replica dies, the session is lost.
+Use fully qualified image names (docker.io/library/nginx, not
+nginx): Podman may refuse to guess the registry.
+
+cd weather
+anastasis up
+anastasis status
+YAML works too: an existing compose.yaml loads as long as it uses the
+supported keys. Anything Anastasis cannot run is an error,
+never silently ignored.
+
+How up converges
+anastasis up reads compose.json in the current directory (else
+compose.yaml, else compose.yml; -f picks another file) and hands
+it to the running service. Then it waits, for up to 5 minutes, until every service has its replicas
+ready, and prints the status. It exits with an error if a rollout pauses or rolls back.
+up -d returns at once and prints the project name.
+
+Project name: COMPOSE_PROJECT_NAME if set, else the top-level
+name, else the directory name, lowercased.
+One name, one directory. A project registered from one directory cannot be
+brought up from another. Give two projects different name keys, or run
+anastasis down before moving one. Another file in the same directory is the same
+project, so compose.yaml can become compose.json with a plain
+up.
+Variables: ${VAR}, ${VAR:-default} and the other
+Compose forms take their values from your environment and from a .env file next to
+the project file; the environment wins.
+Running up again with a changed file updates only the services whose config
+changed.
+
+Status and scaling
+$ anastasis status
+PROJECT  SERVICE  READY  OUTDATED  PORT  AUTO  STATE
+weather  web      3/3    0         8000  -     ok
+
+READY is ready replicas over the replicas wanted; OUTDATED
+counts replicas still on an old config during a rollout.
+STATE is ok, starting, rolling out,
+crash backoff until …, paused: … or error: ….
+Warnings follow the table, for example when healthchecks cannot run.
+
+anastasis scale weather web=5       # lasts until the next up
+anastasis down weather              # remove containers and network
+anastasis down weather --volumes    # and the project's named volumes
+Only stateless services scale. A service that keeps state in a local volume (SQLite, files)
+must stay at one replica.
+
+Self-healing
+
+Exited and unhealthy replicas are replaced.
+A replica that dies within 30 seconds of starting puts the service in crash backoff: 1 second,
+doubling up to 5 minutes. Replicas that died while Anastasis was not running, such as during a
+reboot, are replaced without backoff.
+A replica whose healthcheck gives no result for interval + timeout
+stops getting traffic, and is replaced after retries such periods. Podman 4.9 never
+times out a hung check by itself.
+Replicas without a healthcheck count as ready as soon as they start.
+
+Rolling updates and rollback
+A rollout starts when a service's config changes and you run up. Anastasis
+defaults to order: start-first, unlike Compose's stop-first: a new
+replica starts and becomes ready before an old one stops, so even a single-replica service updates
+without downtime.
+"deploy": {
+"update_config": {
+"parallelism": 1,
+"delay": "5s",
+"monitor": "30s",
+"failure_action": "rollback"
+}
+}
+If new replicas fail within monitor (default 30 seconds),
+failure_action decides:
+
+pause (default): the rollout stops, and the old replicas that are left keep
+serving. Fix the file and run up again.
+rollback: the old config comes back.
+continue: the rollout carries on.
+
+anastasis rollout restart weather web rolls every replica the same way and pulls
+the image again, for a moving tag such as latest.
+ports: still works for single-replica services, which then update with
+stop-first and a short outage. Use x-anastasis.expose to scale and to
+update without downtime.
+
+Autoscaling
+"deploy": {
+"replicas": 2,
+"resources": { "limits": { "cpus": "0.5" } }
+},
+"x-anastasis": {
+"expose": "8000:8080",
+"autoscale": { "min": 1, "max": 6, "inflight": 10, "cpu": 70 }
+}
+replicas is the starting count, and the floor when min is left out.
+inflight is the target number of concurrent requests per replica; cpu the
+target percent of the CPU limit per replica.
+
+Anastasis works out a replica count from each signal (ready replicas × observed ÷ target,
+rounded up) and uses the higher one, within min and max.
+Scaling up starts within about 15 seconds, plus the time new replicas take to become ready.
+Scaling down waits until the load has been lower for 5 minutes, then removes one replica per
+minute.
+Missing data never scales down.
+cpu needs deploy.resources.limits.cpus, and on rootless Podman
+cgroup v2. On cgroup v1 the CPU signal is unavailable and anastasis status says
+so.
+inflight needs x-anastasis.expose: only the load balancer counts
+requests. A WebSocket or server-sent-events connection counts for as long as it stays open, so
+scale live dashboards on cpu.
+anastasis scale refuses autoscaled services: change min or
+max in the file and run up.
+The AUTO column shows each decision, for example
+2→4 (inflight 14.0/10, cpu 55/70).
+
+Volumes and data
+
+Keep state in named volumes or bind mounts. Anonymous volumes (an image's
+VOLUME, such as redis /data, or a volume entry without a source) belong
+to one replica and are deleted with it. Every replacement, rollout or scale-down starts them
+empty. Compose keeps them across a recreate; Anastasis does not.
+down --volumes removes the project's named volumes, never
+external ones.
+A volume belongs to one project: up refuses a project that names another
+project's volume. To share one, mark it "external": true in both projects.
+A project file is trusted like a script. Bind mounts of any host path and
+cap_add are passed to Podman as written. Rootless Podman limits them to what your
+user can do, but a bind mount of your home directory can still read your files.
+privileged, devices and pid are refused.
+
+Upgrading Anastasis
+GOBIN=~/.local/bin go install github.com/rationislabs/anastasis/cmd/anastasis@latest
+systemctl --user restart anastasis
+Containers keep running while Anastasis restarts, and the new binary adopts them.
+
+Troubleshooting
+
+Replicas stay starting and never get traffic
+Healthchecks on rootless Podman need a systemd user session. Run
+sudo loginctl enable-linger "$USER". anastasis status warns about
+this.
+The load balancer cannot bind a port below 1024
+Allow unprivileged ports with sysctl net.ipv4.ip_unprivileged_port_start=80 (or
+lower). Anastasis does not change it for you.
+Podman refuses the image name
+Use the fully qualified name, with the registry: docker.io/library/nginx.
+up says the project belongs to another directory
+See one name, one directory.
+A key is “not supported”
+Anastasis refuses what it cannot run instead of ignoring it. The
+reference lists each refused key and what to do
+instead.
+
+Anastasis is open source under the Apache License 2.0.
+Source on GitHub.
+
+Anastasis: container orchestration on rootless Podman
+
+Skip to content
+
+Guide
+Reference
+GitHub
+
+Container orchestration on rootless Podman
+Anastasis keeps your services running at the size you asked for. It replaces replicas
+that die, balances traffic across them, rolls out updates without downtime and scales on load.
+One binary, one JSON project file, no root daemon, no cluster.
+The name is Greek: ἀνάστασις, resurrection. What dies comes
+back.
+
+$ anastasis status
+PROJECT  SERVICE  READY  OUTDATED  PORT  AUTO  STATE
+weather  web      3/32/33/3    0         8000  -     okstartingok
+A replica dies. Anastasis starts a new one and puts it back behind port 8000 when its
+healthcheck passes.
+
+What it fixes
+
+Replicas behind one port
+Run several copies of a service. A built-in HTTP load balancer follows every replica as it
+comes and goes.
+"deploy": { "replicas": 3 },
+"x-anastasis": { "expose": "8000:8080" }
+
+Self-healing
+Exited or unhealthy replicas are replaced. A service that keeps crashing backs off, from 1
+second doubling up to 5 minutes.
+"healthcheck": { "test": ["CMD", "wget", "-qO-", "http://localhost:8080/health"],
+"interval": "5s" }
+
+Rolling updates without downtime
+Change the file and run up. New replicas start before old ones stop; if they
+fail, the rollout pauses or rolls back.
+"image": "ghcr.io/rationislabs/weather-live-dashboard:1.5.0"
+$ anastasis up
+
+Autoscaling
+Scale on concurrent requests, CPU, or both. Scaling up starts within about 15 seconds;
+scaling down waits for 5 quiet minutes.
+"autoscale": { "min": 1, "max": 6, "inflight": 10, "cpu": 70 }
+
+Run it
+A project is a Compose-shaped JSON file. This one runs three replicas of a web app behind port
+8000:
+{
+"name": "weather",
+"services": {
+"web": {
+"image": "ghcr.io/rationislabs/weather-live-dashboard:1.4.0",
+"healthcheck": {
+"test": ["CMD", "wget", "-qO-", "http://localhost:8080/health"],
+"interval": "5s"
+},
+"deploy": { "replicas": 3 },
+"x-anastasis": { "expose": "8000:8080", "sticky": true }
+}
+}
+}
+Save it as compose.json, then:
+anastasis up                 # waits until every replica is ready
+anastasis status
+curl http://localhost:8000/
+The guide covers installing Anastasis and Podman first. Existing
+compose.yaml files load too, as long as they use the
+supported keys.
+
+What it is not
+
+Not Kubernetes. No cluster, no control plane, no API objects. One machine,
+one process under your user.
+Not multi-host. Anastasis runs the services of one machine.
+Not for every engine. It runs on rootless Podman 4 or newer, over Podman's
+API socket.
+Not a general proxy. The load balancer speaks HTTP, round-robin over ready
+replicas.
+Not for scaling state. Services that keep data in a local volume stay at one
+replica.
+
+Anastasis is open source under the Apache License 2.0.
+Source on GitHub.
+
+Reference: Anastasis
+
+Skip to content
+
+Guide
+Reference
+GitHub
+
+Reference
+The project file keys Anastasis understands, the ones it refuses, and its
+commands.
+
+Top level
+Service keys
+healthcheck
+ports
+volumes
+deploy
+x-anastasis
+Refused keys
+Commands
+
+A project file is JSON (compose.json) or YAML (compose.yaml) in the shape
+of the Compose specification. Strings may use
+${VAR} and the other Compose variable forms. A key that is not listed here is an error:
+Anastasis never runs a file differently than it is written. Durations are Compose durations such as
+5s or 1m30s.
+
+Top level
+
+KeyMeaning
+
+nameProject name. COMPOSE_PROJECT_NAME wins over it; without
+either, the directory name is used. Lowercase letters, digits, - and
+_.
+servicesThe services, by name.
+volumesNamed volumes the services use; see named
+volumes.
+networksAccepted; every project gets one network, so only
+default may be named.
+versionAccepted and ignored, as in Compose.
+x-…Any key starting with x- is ignored, so it can hold
+shared values.
+
+Named volumes
+
+KeyMeaning
+
+nameThe volume's real name. Default: project_key.
+externaltrue: the volume exists already, is never deleted,
+and may be shared between projects. Its name defaults to the key.
+driverOnly local.
+labelsAccepted and ignored.
+
+Service keys
+
+KeyMeaning
+
+imageRequired. Use the fully qualified name, with the registry.
+commandA string or a list.
+entrypointA string or a list.
+environmentA mapping or a list of KEY=value. A bare
+KEY takes its value from your environment, or is left out.
+env_fileA path, a list of paths, or a list of
+{"path": …, "required": false} (path, required). Files load in
+order; environment wins.
+volumesMounts; see volumes.
+healthcheckSee healthcheck.
+labelsA mapping or a list.
+userUser inside the container.
+working_dirWorking directory inside the container.
+stop_signalSignal that stops a replica.
+stop_grace_periodTime between that signal and a kill. Default
+10s.
+cap_addPassed to Podman as written.
+cap_dropPassed to Podman as written.
+read_onlyRead-only root filesystem.
+deploySee deploy.
+portsPublishes ports directly; see ports. Only for a
+single replica.
+networksOnly default.
+depends_onAccepted and ignored: Anastasis retries until dependencies
+are up. The names must still be services of the project.
+restartAccepted; Anastasis keeps every service running.
+"no" and on-failure are refused.
+container_nameAccepted and ignored: Anastasis names replicas
+itself.
+nameAccepted and ignored.
+x-anastasisSee x-anastasis.
+
+healthcheck
+
+KeyMeaning
+
+testA list such as ["CMD", "wget", "-qO-", "http://localhost:8080/health"],
+or a string, which runs in a shell.
+intervalTime between checks.
+timeoutA check that takes longer fails.
+start_periodFailures during this time after start do not count.
+retriesFailures in a row before a replica is unhealthy and
+replaced.
+disableTurn off the image's own healthcheck.
+start_intervalAccepted and ignored.
+
+A replica only gets traffic once its healthcheck passes. Without a healthcheck it counts as ready
+when it starts.
+
+ports
+Short form [[host_ip:]published:]target[/protocol], such as "8080:80", or
+the long form below. A service with ports runs one replica and updates with
+stop-first; to scale, use expose. Port ranges are
+refused.
+
+KeyMeaning
+
+targetContainer port, required.
+publishedHost port.
+host_ipHost address to bind.
+protocoltcp (default), udp or sctp.
+modeAccepted and ignored.
+nameAccepted and ignored.
+app_protocolAccepted and ignored.
+
+volumes
+Short form [source:]target[:mode]. A source that is a path (./data,
+/srv/data, ~/data) is a bind mount; any other source is a
+named volume, which must be declared at the top level. No source makes an
+anonymous volume, which belongs to one replica and is deleted with it. Relative paths are relative to
+the project file.
+
+KeyMeaning
+
+typebind, volume or tmpfs.
+sourceHost path or volume name. Required for a bind mount.
+targetAbsolute path in the container.
+read_onlyMount read-only.
+bindselinux (z or Z) and
+create_host_path. propagation and recursive are
+refused.
+volumenocopy and subpath are refused.
+tmpfsRefused: tmpfs options are not supported. A plain
+type: tmpfs works.
+consistencyAccepted and ignored.
+
+deploy
+
+KeyMeaning
+
+replicasHow many replicas to run. Default 1. With autoscaling, the
+starting count.
+resourceslimits: cpus (such as
+"0.5") and memory (such as "256m"). reservations
+is accepted and ignored.
+update_configHow rollouts run; see below.
+restart_policyAccepted; condition none and
+on-failure are refused.
+modeOnly replicated.
+labelsAccepted and ignored.
+endpoint_mode, placement, rollback_configRefused;
+see refused keys.
+
+update_config
+
+KeyMeaning
+
+parallelismReplicas replaced at a time. Default 1; 0 means all at
+once.
+delayWait between batches.
+monitorHow long new replicas must survive. Default
+30s.
+orderstart-first (default) or stop-first
+(default with ports, the only order ports allows).
+failure_actionpause (default), rollback or
+continue.
+max_failure_ratioRefused unless 0.
+
+x-anastasis
+A service-level block for what Compose has no keys for.
+
+KeyMeaning
+
+expose"hostPort:containerPort", such as
+"8000:8080": the HTTP load balancer on the host port, forwarding to that port of every
+ready replica.
+stickytrue keeps each browser on one replica. Needs
+expose.
+autoscaleSee below.
+
+autoscale
+
+KeyMeaning
+
+maxRequired, at least 1.
+minAt least 1; defaults to deploy.replicas. Scaling to
+zero is not supported.
+inflightTarget concurrent requests per replica. Needs
+expose.
+cpuTarget percent of the CPU limit per replica. Needs
+deploy.resources.limits.cpus.
+
+Set inflight, cpu, or both; the higher replica count wins. A service with
+ports cannot autoscale.
+
+Refused keys
+Anastasis stops with an error on these instead of running something you did not write.
+
+KeyWhy, and what to do instead
+
+buildAnastasis does not build images. Push an image and set
+image.
+network_mode, custom networksEvery project gets one network;
+services reach each other by name.
+restart: "no", restart: on-failureEvery service is kept
+running. Run one-shot jobs with podman run.
+privileged, devices, pidNot supported, along with
+any service key not listed under service keys.
+endpoint_mode, placement, mode: globalSwarm-only:
+there is one host.
+rollback_configUse update_config.failure_action: rollback.
+max_failure_ratioNot supported; leave it out or set it to 0.
+propagation, recursiveBind propagation options are not
+supported.
+nocopy, subpathVolume options are not supported.
+tmpfs optionsUse a plain type: tmpfs mount.
+Port rangesPublish each port on its own.
+Volume drivers other than localAnastasis uses Podman's local
+volumes.
+
+Commands
+
+CommandWhat it does
+
+anastasis serveRuns Anastasis: the loop that keeps services at their
+size, and the API socket the other commands talk to. Usually started by the systemd user
+unit.
+anastasis upRegisters or updates the project and waits, up to 5
+minutes, until it converges.
+anastasis down projectRemoves the project's containers and
+network.
+anastasis scale project service=n …Sets
+replica counts until the next up. Refuses autoscaled services.
+anastasis status [project]Shows every service, or one
+project's.
+anastasis rollout restart project serviceRolls every
+replica and pulls the image again.
+anastasis versionPrints the version.
+
+Flags
+
+FlagCommandMeaning
+
+-socket pathall, before the commandAPI socket.
+Default $XDG_RUNTIME_DIR/anastasis.sock.
+-f fileupProject file. Default
+compose.json, else compose.yaml, else compose.yml.
+-dupReturn at once and print the project
+name.
+--volumesdownAlso remove the project's named
+volumes, never external ones.
+-state pathserveState file. Default
+~/.local/share/anastasis/state.json.
+-runtime pathservePodman API socket.
+Default $XDG_RUNTIME_DIR/podman/podman.sock.
+
+Anastasis is open source under the Apache License 2.0.
+Source on GitHub.
+
+# databricks-data-pipeline-app
+
+European electricity on Databricks: the generation mix, renewable share and day-ahead prices
+of Austria and its six neighbours, every 15 minutes since 2023. A Lakeflow Declarative
+Pipeline refines the data from bronze to gold with data-quality expectations, an AI/BI
+dashboard gives the overview, and a Gradio Databricks App answers "when is power greenest
+and cheapest today?". One Asset Bundle deploys all of it. A Rationis Labs portfolio project.
+
+```
+GitHub Actions cron (every 6 h)            Databricks Free Edition (Asset Bundle)
+  ingest ─ Energy-Charts v2 ─► JSON ─► UC volume  /Volumes/<catalog>/bronze/landing/{endpoint}/{area}/{start}_{end}.json
+  (31 s between requests)                      │
+  then: job energy-refresh                     ▼  pipeline "energy" (triggered, serverless)
+                                          bronze  power_raw, price_raw         Auto Loader, every file version
+                                          silver  power_15min, price_15min     typed, newest file wins, expectations
+                                          gold    mix_hourly, mix_daily, price_vs_renewables, green_hours, freshness
+                                               │                        │
+                                     AI/BI dashboard            Gradio app (SQL warehouse)
+                                     Mix · Prices · Compare     Explorer · Health
+```
+
+## Data
+
+| Endpoint | Areas | Resolution |
+|---|---|---|
+| `/v2/public_power` — net generation per source, load, renewable share | AT, DE, CH, CZ, HU, SI, IT | 15 min (CH, SI: 60 min) |
+| `/v2/price` — day-ahead price | AT, DE-LU, CH, CZ, HU, SI, IT-North | 15 min (CH: 60 min) |
+
+Data: Energy-Charts (Fraunhofer ISE), CC BY 4.0; prices: Bundesnetzagentur | SMARD.de,
+CC BY 4.0. Italy's price is the IT-North zone. The renewable share is Energy-Charts' own
+`renewable_share_of_load`, the one definition used everywhere.
+
+The ingest asks politely: User-Agent `RationisLabsEnergyLakehouse/1.0 (+https://github.com/rationislabs/databricks-data-pipeline-app)`,
+31 seconds between requests to the same endpoint (the published limit is 2 per minute),
+`Retry-After` honoured on HTTP 429, and at most one calendar month per request. The first
+runs are the backfill since 2023-01-01 (≈ 650 requests, ≈ 3 hours over one or two runs);
+after that each run fetches yesterday and today.
+
+## Why it is built this way: Databricks Free Edition
+
+- **Serverless only, with a daily compute quota.** Exceed it and compute is off for the rest
+  of the day. The pipeline therefore runs *triggered* after each ingest, never continuously,
+  and a failed run is simply caught up by the next one.
+- **Outbound internet is limited to an unpublished list of trusted domains.** So Databricks
+  never calls the API: GitHub Actions fetches the data and drops files into a Unity Catalog
+  volume, where Auto Loader picks them up — the usual "external producer, lakehouse ingests
+  incrementally" pattern.
+- **Apps are private and run at most 24 hours after a start.** Every viewer needs a Databricks
+  identity with CAN USE; there is no public URL. Start the app before a demo (below); the
+  screenshots here show it.
+- One SQL warehouse (2X-Small, "Serverless Starter Warehouse"), 5 concurrent job tasks,
+  1 active pipeline per type, no commercial use.
+
+## Data quality
+
+Silver applies expectations (SQL in `pipeline/rules.py`, tested locally with the same strings):
+
+| Rule | Action |
+|---|---|
+| timestamp present and on its 15- or 60-minute grid; known series, country, zone; value present | drop the row |
+| generation ≥ −1 MW; shares 0–100 %; price −500…4000 €/MWh | keep, count a warning |
+
+Nothing ever fails the pipeline: one bad value must not stop seven countries. The app's
+Health tab shows rows dropped and warned per rule, freshness per area, and the last runs.
+
+## Run it locally
+
+Requirements: [uv](https://docs.astral.sh/uv/) and Java 17 or newer (for the local Spark tests).
+
+```bash
+uv sync
+uv run inv test                       # offline: API fixtures, local Spark, fake warehouse
+uv run inv ingest --since 2026-10-01  # fetch into data/ without Databricks
+```
+
+| Task | What it does |
+|---|---|
+| `uv run inv test` / `lint` | tests / ruff |
+| `uv run inv ingest [--since D] [--no-local]` | fetch into `data/`, or (`--no-local`) upload and refresh for real |
+| `uv run inv deploy` | `databricks bundle deploy` |
+| `uv run inv app` | run the app locally against your workspace |
+| `uv run inv requirements` | regenerate `app/requirements.txt` from `uv.lock` |
+
+Everything except `test`, `lint`, `requirements` and a local `ingest` talks to your workspace
+and reads it from the environment: `DATABRICKS_HOST` plus `DATABRICKS_TOKEN` (or
+`DATABRICKS_CLIENT_ID` and `DATABRICKS_CLIENT_SECRET`); `inv app` also needs
+`DATABRICKS_WAREHOUSE_ID` (the warehouse's page: Connection details → HTTP path, the last part).
+
+## One-time setup (free plans only)
+
+1. Create a Databricks Free Edition account for Rationis Labs.
+2. Create a service principal with an OAuth secret (Settings → Identity and access), or a
+   personal access token if Free Edition does not offer service principals.
+3. In the GitHub repo, in this order: an environment `prod` (Settings → Environments) limited
+   to the `main` branch, holding the secrets `DATABRICKS_CLIENT_ID` and
+   `DATABRICKS_CLIENT_SECRET`, or `DATABRICKS_TOKEN` (no repository-level copies: any branch
+   could read those); then the variable `DATABRICKS_HOST` (the workspace URL). Optional
+   variable `ENERGY_CATALOG` if the workspace catalog is not called `workspace` (Deploy writes
+   it into the app's `app/app.yaml` too). Ingest and deploy stay off until
+   `DATABRICKS_HOST` is set. Give `prod` no required reviewers or wait timer: the scheduled
+   ingest and the `validate` check on every push to `main` use it too, and would wait.
+4. Deploy: push to `main` (or run the Deploy workflow, or `uv run inv deploy`).
+5. Let the app read gold (replace the principal with the app's service principal, shown on the
+   app's page):
+
+   ```sql
+   GRANT USE CATALOG ON CATALOG workspace TO `<app service principal>`;
+   GRANT USE SCHEMA, SELECT ON SCHEMA workspace.gold TO `<app service principal>`;
+   ```
+
+6. Run the Ingest workflow once by hand (or wait for the cron); it backfills since 2023 over
+   one or two runs and refreshes the pipeline after each.
+7. Before a demo: `databricks bundle run explorer` starts the app and deploys its current code
+   (starting it from the UI alone can leave it without a deployment). Give viewers CAN USE
+   and take the screenshots for this README.
+
+## Known issues to fix
+
+- An error that never goes away on an old date range would block that country on every run.
+- The Health tab adds up 7 days of runs, so its counts are too high, and it doesn't say whether
+  a rule drops or warns.
+- The Explorer's default date stays at the day the app was started.
+- Price freshness can show a negative age.
+- Silver reprocesses all of bronze on every run; Databricks' incremental change feed
+  (AUTO CDC) would avoid that.
+- The bundle grants the app nothing, so the README's GRANT step is required.
+- GitHub Actions minutes for a private repo may come close to the free 2,000 per month.
+- A failed refresh hides that run's error list.
+- The Mix chart sums all countries until you pick one.
+- Local runs against Databricks leave a temp copy of the data on disk.
+
+Contact: [github.com/rationislabs](https://github.com/rationislabs)
+
+This project was built with AI assistance.
+
+# Hearth
+
+Hearth: a self-hosted ledger for two people: what to watch, read, cook, play and talk
+about, where to go, and what the plants need. Reflex over SQLite, one database
+file, no accounts.
+
+It ships empty: everything you see is what you add. To look around first, fill a separate demo
+ledger with made-up data (Alex and Sam in Vienna) and run it on its own port:
+
+```sh
+export HEARTH_DATA_DIR=/tmp/hearth-demo
+(cd hearth && .venv/bin/python -m alembic upgrade head)
+hearth/.venv/bin/python scripts/seed/seed_demo.py
+cd hearth && .venv/bin/reflex run --env prod --single-port --frontend-port 3100 --backend-host 127.0.0.1
+```
+
+| Tonight | Dates |
+|---|---|
+| ![Tonight: a place, a recipe, a question and a game dealt for the evening](docs/screenshots/tonight.png) | ![Dates: the wishlist on a map, visited places in green](docs/screenshots/dates-map.png) |
+
+| Recipes | One recipe |
+|---|---|
+| ![Recipes, with votes for each of the two people](docs/screenshots/recipes.png) | ![A recipe's ingredients and steps](docs/screenshots/recipe.png) |
+
+## Pages
+
+| Route | What it holds |
+|---|---|
+| `/` | Tonight: one place, one recipe, one question, one game and one show, dealt as cards, plus an outfit and a photo gallery |
+| `/library` | Films, series and anime, with watch progress and optional TMDB descriptions |
+| `/books` | Four shelves: want to buy, want to read, reading, read |
+| `/recipes`, `/meal-plan` | Recipes with ingredients and steps, a cook log and a weekly plan |
+| `/dates` | Places you want to go, a map, the log of dates you went on, and trips |
+| `/music` | Spotify playlists mirrored locally, tagged by vibe via Last.fm |
+| `/convo` | Conversation questions, one at a time, filtered by audience and depth |
+| `/household` | Plants and watering, shops worth remembering, games |
+
+Most tables carry a per-person want-to-try vote, a 1-10 rating and notes,
+edited in place.
+
+## Run it with Docker
+
+You need Docker with Compose v2.24 or later and a free [Tailscale](https://tailscale.com) account.
+Every phone or laptop that should open the app joins the same tailnet. The tailnet needs MagicDNS and HTTPS Certificates enabled
+(Tailscale admin console > DNS), or the `https://hearth.<tailnet>.ts.net` address cannot get a certificate.
+
+```bash
+mkdir hearth && cd hearth
+# download compose.yml and .env.example from this repository into this folder
+cp .env.example .env && chmod 600 .env
+# paste a Tailscale auth key into TS_AUTHKEY (admin console > Settings > Keys; not ephemeral)
+# set HEARTH_ALLOWED_HOST to hearth.<your-tailnet>.ts.net (admin console > DNS)
+docker compose up -d
+```
+
+Open `https://hearth.<your-tailnet>.ts.net`. The first visit asks for your two names and,
+optionally, your home location. Change either later under Settings (the gear icon). Do not
+set `PORT`: the frontend is built for port 3000 inside the container, and another value breaks
+the websocket. For the same reason, reach it over https (as above) or publish it on port 3000
+only (`-p 127.0.0.1:3000:3000`): over plain http the page connects to port 3000, whatever
+port it was opened on.
+
+**Who is voting.** The two names in the header choose who this browser votes as. One tap
+switches, so a shared phone works. There is no password: your tailnet is the login, and the
+app cannot tell two people on one device apart.
+
+**Updating.** `docker compose pull && docker compose up -d`. Every start backs up the
+database first (`hearth-prestart-*.db.gz`, the last five kept), then migrates it.
+
+**Upgrading from couples-app.** The project is now called Hearth, and its image is
+`ghcr.io/rationislabs/hearth`. Take the new `compose.yml`, and in `.env` rename every
+`LEDGER_` setting to `HEARTH_` and `COUPLES_VERSION` to `HEARTH_VERSION`. The first start
+renames `ledger.db` and the `ledger-*.db.gz` backups for you. To keep your old address, set
+`TS_HOSTNAME=couples`. A host install runs `./setup.sh` again for its new `hearth/.venv`.
+
+**Rolling back.** Downgrades are not automatic. Set `HEARTH_VERSION` in `.env` to the
+version you came from, then restore the pre-start backup taken just before the update.
+
+**Backups.** Every night at `HEARTH_BACKUP_AT` (default 03:30, in `TZ`) the app writes a
+verified, compressed copy of the database and mirrors your photos into the `backups` volume.
+`HEARTH_BACKUP_AT` must be `HH:MM` with two-digit hours (e.g. `03:30`); anything else falls
+back to 03:30 with a warning in the logs. The last 30 nightly copies are kept. If a backup
+fails, or none has run for 48 hours, the header says so. Point the `backups` volume at a
+second disk or a synced folder: a backup on the same disk as the data does not survive that
+disk. If you bind-mount a host folder instead of the named volume, it must be writable by
+uid 10001.
+
+**Restoring.**
+
+```bash
+docker compose stop app
+docker compose run --rm app restore /backups/hearth-<stamp>.db.gz
+docker compose up -d
+```
+
+The current database is kept as `hearth.db.before-restore`, so a wrong pick can be undone.
+
+**Optional integrations.** TMDB, Spotify and Last.fm keys go in `.env`; they never enter the
+database or a backup. `compose.yml` passes only these names from `.env` to the app:
+`TMDB_API_KEY`, `TMDB_READ_TOKEN`, `SPOTIFY_CLIENT_ID`, `SPOTIFY_CLIENT_SECRET`,
+`SPOTIFY_REDIRECT_URI`, `SPOTIFY_REFRESH_TOKEN`, `LASTFM_API_KEY`, `TZ`, `HEARTH_BACKUP_AT`
+and `HEARTH_BACKUP_KEEP` (`TS_AUTHKEY` goes only to the Tailscale sidecar). A new key added to
+`.env` must also be listed in the app's `environment:` in `compose.yml`. Spotify's one-time
+`scripts/data/spotify_sync.py --auth` opens a browser, so run it from a checkout of this
+repository on a machine with one, then copy the `SPOTIFY_REFRESH_TOKEN` it writes into the
+`.env` next to `compose.yml`.
+
+**Security note.** The container's root filesystem stays writable because Reflex writes
+`__pycache__/*.pyc` under `/app` and `/app/hearth/.web/backend/upload_is_used`; your data
+is still only in the data and backups volumes.
+
+## Setup
+
+Needs Linux, Python 3.12, [uv](https://docs.astral.sh/uv/) and Node.js 22 (Reflex builds the frontend with it).
+
+```bash
+./setup.sh --home "48.8566,2.3522"     # your own lat,lon; see ./setup.sh --help
+./hearth.sh start                      # prod build on 127.0.0.1:3100
+```
+
+`setup.sh` creates the venv, copies `.env.example` to `.env`, builds an empty
+database and runs `scripts/ops/preflight.py`. Then edit `.env`:
+
+- The two names and the home location: the first page asks for them, and Settings changes them later.
+- API keys, only if you use the matching importers (TMDB, Spotify, Last.fm)
+
+`./hearth.sh` also has `stop`, `restart`, `status`, `logs`, `check` (bind
+address) and `watch` (rebuild on save).
+
+## No login, by design
+
+The app has no authentication. It binds to loopback only and is meant to be
+reached over [Tailscale](https://tailscale.com/) with `tailscale serve`, so the
+tailnet is the login. Do not put it on the open internet. `./hearth.sh check`
+and `scripts/ops/preflight.py` verify the bind address, firewall and backups.
+
+## Adding data
+
+Everything can be typed into the app. For bulk loads:
+
+| Script | Input |
+|---|---|
+| `scripts/import/import_places.py` | Google Takeout saved-list CSVs, or a pasted list of Maps links |
+| `scripts/import/import_convo.py` | `csv/convo.csv`: `ordinal,text,audience,depth` (depth `light`, `medium` or `deep`; audiences in the script) |
+| `scripts/data/spotify_sync.py` | your Spotify playlists (needs Spotify keys) |
+| `scripts/data/tmdb_fill.py` | fills missing library descriptions from TMDB |
+| `scripts/data/geocode_places.py`, `categorize_places.py` | coordinates and types for saved places |
+
+Each script's docstring has its full usage. `csv/`, `json/` (API caches) and
+`gallery/` are gitignored.
+
+## Backups
+
+On a host install (./setup.sh), ./backup_db.sh writes a verified, compressed copy of hearth.db to backups/; in Docker the app does this itself (see "Run it with Docker"). It uses SQLite's online backup API. Never `cp` the database while the
+app runs: under WAL the copy can miss the newest writes.
+
+## Tests
+
+No pytest. Each test file is a plain script, run from the repo root:
+
+```bash
+tests/run.sh
+```
+
+Run `tests/run.sh`: it runs every test on a fresh temporary database, so nothing
+touches your real data.
+
+## Schema changes
+
+Alembic, through `reflex db makemigrations` and `reflex db migrate`. Keep
+migrations additive, and run `./backup_db.sh` before migrating a database you
+care about.
+
+---
+
+Descriptions, genres and years come from TMDB. This product uses the TMDB API
+but is not endorsed or certified by TMDB.
+
+This project was built with AI assistance.
+
+# Weather Lakehouse
+
+A local, Docker-only data platform for 45+ years of hourly ERA5 weather in 20 cities:
+
+- **Airflow 3** orchestrates quota-aware ingestion from the Open-Meteo archive.
+- **PySpark 4 on a standalone cluster** refines the data through **bronze → silver → gold Delta Lake** tables, with data-quality gates.
+- A **Dash** app presents climate analytics and pipeline health.
+
+```
+cities.yaml ─┐
+Open-Meteo ──► landing JSON ──► bronze.weather_raw ──► silver.weather_hourly ──► gold.* ──► Dash
+ (ERA5)        (ingest tasks)   raw payload, append    typed, UTC + local date,  7 analytics
+                                                       MERGE on (city, hour),    tables
+                                                       DQ gate ──► ops.dq_results
+```
+
+| Overview | Warming |
+|---|---|
+| ![Overview: the latest year's anomaly for each city on a map](docs/screenshots/overview.png) | ![Warming: annual anomalies with trends, and warming stripes](docs/screenshots/warming.png) |
+
+| Extremes | Airflow |
+|---|---|
+| ![Extremes: hot days, cold nights and heavy rain per year, and the distribution by decade](docs/screenshots/extremes.png) | ![The daily_refresh DAG in Airflow](docs/screenshots/airflow-dag.png) |
+
+| Service | URL |
+|---|---|
+| Dashboard | http://localhost:8050 |
+| Airflow (no login, local only) | http://localhost:8088 |
+| Spark master UI | http://localhost:8081 |
+
+All ports bind to `127.0.0.1` only, so nothing is reachable from the LAN. If a port is taken,
+pick another with `AIRFLOW_PORT`, `SPARK_UI_PORT` or `DASH_PORT`, for example
+`AIRFLOW_PORT=8090 uv run inv demo`.
+
+The stack is for local development only: Airflow lets everyone in as admin, Spark has no
+authentication, and Postgres uses `airflow`/`airflow`. Do not expose it beyond `127.0.0.1`.
+
+## Quick start
+
+Requirements: Docker with Compose v2, about 8 GB of free RAM, and [uv](https://docs.astral.sh/uv/).
+
+```bash
+uv sync
+uv run inv demo      # 3 cities (Singapore, Vienna, Yakutsk), 1991 → today
+```
+
+The demo takes about 15 minutes: about 6 of those are the API's per-minute limit, the rest is Spark. The dashboard fills in when the `refine` task finishes. Before that, every page shows its progress.
+
+Stop the stack with `uv run inv down`. Your data in `./lakehouse` and the Airflow database are kept.
+
+To watch the containers, images, volumes and logs in a terminal UI, run [lazydocker](https://github.com/jesseduffield/lazydocker) (optional):
+
+```bash
+lazydocker
+```
+
+## Full backfill
+
+```bash
+uv run inv up && uv run inv backfill
+```
+
+The full backfill covers 20 cities × 1980 → today, about 940 city-years, about 8M hourly rows and about 1 GB on disk. Open-Meteo's free tier allows 10,000 weighted calls per day, and one city-year costs about 31. So the backfill takes **about 3 days** and runs unattended:
+
+- A local SQLite budget keeps calls under the per-minute, per-hour and per-day limits.
+- A task that hits a limit is **rescheduled**, not failed. The run continues after the quota resets.
+- The daily budget is a calendar UTC day: a task that exhausts it resumes at 00:05 UTC.
+- City-years already complete are never fetched again, so re-triggering is always safe.
+
+`daily_refresh` runs at 06:00 UTC. It starts with a `backfill_started` short-circuit, so it stays idle until a backfill has actually ingested something. Once one has, it re-fetches the last 14 days, and ERA5's preliminary values are overwritten by MERGE. After a long downtime the window reaches back to a week before the last fetch (never before 1 January), so gaps are refetched automatically. It then completes the previous year and rebuilds gold.
+
+## Layers
+
+| Table | Grain | Notes |
+|---|---|---|
+| `bronze.weather_raw` | one API response | raw JSON payload, SHA-256, fetch/load timestamps |
+| `silver.weather_hourly` | city × UTC hour | 12 variables, `date_local` from each city's time zone, MERGE-upserted |
+| `gold.daily_city` | city × local day | min/mean/max temperature, precipitation, snow, gusts, humidity |
+| `gold.climatology_doy` | city × day of year | p10/p50/p90 of the baseline, ±7-day window |
+| `gold.anomaly_monthly` / `anomaly_annual` | city × month / year | vs the baseline (default 1991–2020) |
+| `gold.trend_city` | city | OLS slope °C/decade, R² |
+| `gold.extremes_annual` | city × year | hot days, cold nights, heavy-rain days vs the city's own percentiles |
+| `gold.distribution_decade` | city × decade × 0.5 °C | ridgeline input |
+| `ops.ingest_log` / `dq_results` / `pipeline_stats` | | progress, check history, row counts and freshness |
+
+Data-quality checks are plain PySpark:
+- **Hard failures stop the silver MERGE:** duplicate keys, out-of-range values, unknown cities.
+- **Soft failures only warn:** null share, incomplete years, stale cities.
+
+## Configuring cities
+
+Edit `config/cities.yaml`. Each entry needs `id`, `name`, `country`, `lat`, `lon`, an IANA `tz` and a `climate` zone. The config is validated at plan time. The next `inv backfill` fetches only the new cities. Restart the dashboard (`docker compose restart dash`) to see them.
+
+## Testing
+
+```bash
+uv run inv test            # unit + Spark tests, offline after the first run (needs Java 17+)
+uv run inv test --images   # also builds images and runs the DAG tests inside Airflow
+uv run inv lint
+uv run inv e2e             # real API, isolated stack, 1 city × 2024→now (stop the main stack first)
+```
+
+The first Spark run downloads the Delta Lake jars via Ivy; after that the tests need no network.
+
+## Local development
+
+- `uv sync` creates one `.venv` containing both packages: `etl/` (`weather_etl`) and `dashboard/` (`weather_dash`).
+- The Spark tests need Java 17 or later on your PATH. The Docker images run everything on Java 21.
+- Everything in `weather_etl` runs without Airflow. The DAGs in `airflow/dags` are thin wrappers.
+
+## Known limits
+
+- ERA5 is a ~25 km reanalysis grid. A "city" is the grid cell nearest its coordinates.
+- The most recent days are preliminary, and ERA5 revises them for several days.
+- The backfill speed is bound by the free API quota, not by Spark.
+- Day-of-year charts place non-leap years on a leap-year axis, so dates after Feb 28 shift by one day.
+- For cities east of UTC, the first local day of `FIRST_YEAR` is incomplete (its early hours fall in the previous UTC year) and is dropped, so that January and that year are also missing from the monthly and annual anomalies and their baselines.
+
+## Data attribution
+
+Weather data by [Open-Meteo.com](https://open-meteo.com/) (CC BY 4.0). ERA5 reanalysis by the Copernicus Climate Change Service.
+
+This project was built with AI assistance.
+
+# sentiment-analysis
+
+German and English news headlines, collected politely every 4 hours, scored for sentiment,
+and shown on a dashboard — plus an honest comparison of three sentiment models on headlines
+labelled by hand. A Rationis Labs portfolio project.
+
+```
+GitHub Actions cron (every 4 h)
+  collect ─► politeness gate ─► score ─► store ─► Hugging Face dataset (private, Parquet)
+                                                       │
+Streamlit Community Cloud ◄── read-only token ─────────┘
+local only: train ─► evaluate on the gold set ─► winner ─► Hugging Face model repo (private)
+```
+
+| Trends | Headlines | Label |
+|---|---|---|
+| ![Daily sentiment per source](docs/screenshots/trends.png) | ![Scored headlines, searchable](docs/screenshots/headlines.png) | ![The labelling tab used to build the gold set](docs/screenshots/label.png) |
+
+## Sources
+
+| Source | Language | Feed | Scrapers today |
+|---|---|---|---|
+| BBC News (World) | en | `feeds.bbci.co.uk/news/world/rss.xml` | refused: AI-crawler block, TDM reservation text |
+| The Guardian (World) | en | `theguardian.com/world/rss` | refused: AI-crawler block |
+| Hacker News | en | `news.ycombinator.com/rss` | front page allowed (30 s crawl delay) |
+| Tagesschau | de | `tagesschau.de/index~rss2.xml` | refused: AI-crawler block, reservation of rights |
+| ORF | de | `rss.orf.at/news.xml` | refused: AI-crawler block |
+| Der Standard | de | `derstandard.at/rss` | refused: AI-crawler block |
+| heise online | de | `heise.de/rss/heise-atom.xml` | refused: AI-crawler block, TDM reservation text |
+
+Checked on 2026-10-08; the gate re-checks every run, and the dashboard's Trends tab shows
+what was refused and why. Headlines belong to their publishers.
+
+## Politeness: what cannot be switched off
+
+Every request goes through `sentiment/polite.py`. None of this has a switch:
+
+- **User-Agent** `RationisLabsSentimentBot/1.0 (+https://github.com/rationislabs/sentiment-analysis)`.
+- **robots.txt** (RFC 9309, longest-match rules): our agent must be allowed. No robots.txt
+  (4xx) means no rules; an unreachable one (5xx, network error) means no requests at all.
+- **Rate limit:** one request per 5 seconds per host, or the site's `Crawl-delay` if longer.
+- **Scrapers only** (front pages, article bodies) are also refused when the site:
+  - blocks any named AI or TDM crawler for that URL (GPTBot, ClaudeBot, CCBot, Google-Extended
+    and six more), or
+  - writes a rights reservation in its robots.txt comments ("text and data mining",
+    "Art. 4", "reservation of rights", "Nutzungsvorbehalt", …), or
+  - reserves TDM with TDMRep (`/.well-known/tdmrep.json`, the `tdm-reservation` header or
+    meta tag).
+
+  A site that blocks AI crawlers has said no to automated reading of its pages. We do not
+  slip through because it did not name our bot.
+
+## Scraper switches
+
+`sources.yaml` has two switches per site:
+
+- `frontpage: true` (default) — rank, section and lead story from the front page.
+- `body: false` (default) — the sentiment of the article text as well.
+
+**You are responsible for switching body scraping on**, and for checking that your use is
+allowed where you run it. The article text is scored in memory and dropped: **Never stored**,
+never logged, never shown. The politeness rules above still apply to every request.
+
+## Models and the honest metrics
+
+| Model | Languages | Notes |
+|---|---|---|
+| Majority class | de, en | the floor: always the most common gold label |
+| VADER (`vaderSentiment` 3.3.2) | en | lexicon; no maintained German version exists |
+| TF-IDF + logistic regression | de, en | one per language |
+| `distilbert/distilbert-base-multilingual-cased`, fine-tuned | de, en | one model for both |
+
+Training data (downloaded on use, never committed):
+
+| Lang | Dataset | Content | Licence |
+|---|---|---|---|
+| en | `cardiffnlp/tweet_eval` (sentiment) | tweets | CC BY 3.0 |
+| de | `Alienmaster/SB10k` | tweets | CC BY 4.0 |
+| de | `uhhlt/GermEval2017` | Deutsche Bahn customer feedback | CC BY-NC 4.0 |
+
+Because GermEval-2017 is non-commercial, the trained models are too.
+
+**The gold set** is ~600 of the collected headlines, labelled by hand: a third is the *dev*
+split (chooses the model), the rest the *test* split (the reported numbers, never tuned on).
+50 of them are relabelled blind a week later; Cohen's kappa of the two passes is the label
+noise, and a model gap smaller than that means nothing.
+
+**Metrics,** per language: macro-F1 (most headlines are neutral, so accuracy would flatter
+"always neutral"), per-class precision and recall, confusion matrices, and a 95 % bootstrap
+interval (1,000 resamples). **Winner rule:** the highest dev macro-F1; if its interval
+overlaps another model's, the cheaper one wins. `model.yaml` records the winner per language
+and the pipeline follows it.
+
+Results appear on the dashboard's Models tab and in `metrics.json` once the gold set exists.
+
+### Labelling guideline
+
+Label the event as a reader experiences it, not the writer's tone. "Flood kills 12" is
+negative; "ECB holds rates" is neutral; "Vaccine approved for children" is positive.
+
+## Running it locally
+
+```bash
+uv sync
+uv run inv test                 # offline tests
+uv run inv train --skip-bert    # TF-IDF into models/ (~1 minute); without it nothing is scored
+uv run inv collect --local      # one run into data/, the Hub untouched (takes ~2 minutes)
+uv run inv app --local          # dashboard with the Label tab on http://127.0.0.1:8501
+```
+
+| Task | What it does |
+|---|---|
+| `uv run inv collect [--local]` | one collection run |
+| `uv run inv app [--local]` | dashboard with the Label tab (`LABEL_MODE=1`) |
+| `uv run inv train [--skip-bert]` | train TF-IDF and DistilBERT into `models/` (about an hour on CPU) |
+| `uv run inv evaluate` | score `models/` on the gold set: `metrics.json`, `model.yaml`, model card |
+| `uv run inv push-model` | upload `models/` to the private model repo and pin that commit in `models.lock` |
+| `uv run inv hub-init` | create both private Hub repos |
+| `uv run inv fixtures` | re-record the robots.txt fixtures through the gate (feeds and front pages are invented) |
+
+Settings (`.env`, see `.env.example`): `HF_TOKEN`, `HF_MODEL_TOKEN` (optional, read-only), `HF_DATASET_REPO`, `HF_MODEL_REPO`,
+`SENTIMENT_DATA_DIR`, `SENTIMENT_MODEL_DIR`, `LABEL_MODE`.
+
+## One-time setup (free plans only)
+
+1. Create a Hugging Face account for Rationis Labs and two tokens: one with **write** access
+   (local use and GitHub Actions), one **read-only** (the dashboard).
+2. Put the write token in `.env` as `HF_TOKEN`, then `uv run inv hub-init`.
+3. In the GitHub repo: secret `HF_TOKEN` (write token), optionally secret `HF_MODEL_TOKEN`
+   (the read-only one, used to download models); variables `HF_DATASET_REPO` and
+   `HF_MODEL_REPO`. The cron stays off until `HF_DATASET_REPO` is set.
+4. Streamlit Community Cloud: new app from this repo, main file `app/main.py`, Python 3.12,
+   secret `HF_TOKEN` = the read-only token, plus `HF_DATASET_REPO`. Invite the viewers you want.
+5. After a few days of collection: `uv run inv app`, label ~600 headlines in the Label tab,
+   press "Push labels" (until then they are kept in `~/.cache/sentiment-data`). A week later,
+   do the 50 blind relabels the tab offers.
+6. `uv run inv train`, `uv run inv evaluate`, `uv run inv push-model`, then commit
+   `metrics.json`, `model.yaml` and `models.lock`. The pipeline downloads only the commit
+   `models.lock` names, and loads TF-IDF from skops files, never pickles.
+
+Contact: [github.com/rationislabs](https://github.com/rationislabs)
+
+This project was built with AI assistance.
+
+# telegram_msg_svc_auto
+
+Every morning, one Telegram post per city with the day's weather: a short caption you can read in
+the notification, and a chart of today's temperature and chance of rain.
+
+<!-- screenshot of a post -->
+
+## Set up
+
+1. **Get a bot token.** In Telegram, talk to [@BotFather](https://t.me/BotFather): `/newbot`.
+   If a token was ever pasted into a chat, `/revoke` it and use the new one.
+2. **Pick where it posts.** Press **Start** in the bot's chat to get the posts yourself, or make a
+   private channel and add the bot as an admin with **Post messages**.
+3. Fill in `.env`:
+
+   ```bash
+   cp .env.example .env && chmod 600 .env   # then paste TELEGRAM_BOT_TOKEN
+   uv sync
+   # press Start, or post any message in the channel, then:
+   uv run inv chat-id                        # copy the id into CHAT_ID
+   uv run inv send-now                       # a post right now, to check how it looks
+   ```
+
+## Run it every morning (GitHub Actions)
+
+`.github/workflows/daily.yml` posts at `POST_AT` with no machine of your own. Put the two secrets
+on the repository; type each one at the hidden prompt, never in a chat:
+
+```bash
+gh secret set TELEGRAM_BOT_TOKEN
+gh secret set CHAT_ID
+gh variable set CITY --body "Vienna; Graz"   # optional, like POST_AT, TZ, UNITS, ANSWER_BOT
+```
+
+"Run workflow" on the Actions tab posts right away. To stop the morning posts and start them again:
+
+```bash
+gh workflow disable daily.yml
+gh workflow enable daily.yml
+```
+
+GitHub starts scheduled runs late at busy times, sometimes by half an hour. The workflow has two
+UTC crons, 05:00 and 06:00, because 07:00 in Vienna is one in summer and the other in winter;
+only the one that is `POST_AT` posts. Another `POST_AT` or `TZ` needs other hours there. In a
+public repository GitHub turns schedules off after 60 days without a commit; enable it again.
+
+## Settings
+
+In `.env` for `inv send-now`; on GitHub as variables (`gh variable set`), except the two secrets.
+
+| Variable | Default | Meaning |
+|---|---|---|
+| `TELEGRAM_BOT_TOKEN` | — | From @BotFather. Required; a secret on GitHub. |
+| `CHAT_ID` | — | Where it posts, from `uv run inv chat-id`. Required; a secret on GitHub. |
+| `CITY` | `Vienna` | Up to 10 cities separated by `;`, one post each: `Vienna; Paris, Texas`. |
+| `POST_AT` | `07:00` | When to post, in `TZ`. |
+| `TZ` | `Europe/Vienna` | Time zone for `POST_AT` and for "today". |
+| `UNITS` | `metric` | `metric` or `imperial`. |
+| `ANSWER_BOT` | — | The answer bot's @username; the bot's description points there. |
+
+Each run also sets the bot's description, the text people see before pressing Start: the cities,
+the time, and the answer bot.
+
+## When something goes wrong
+
+A run that didn't post every city fails, and GitHub emails you. The log says why:
+
+- Open-Meteo down: three tries a minute apart, then one line in the chat saying there is no
+  forecast for that city today. The other cities still post.
+- No air-quality data: the post goes out without that line.
+- "CITY 'Wienn': no such place": fix the spelling.
+- "Telegram refused the post": check `CHAT_ID`, and that the bot may post there.
+- "TELEGRAM_BOT_TOKEN rejected": make a new token in @BotFather.
+
+## Development
+
+```bash
+uv run inv test      # offline; never contacts Telegram
+uv run inv lint
+uv run inv fixtures  # re-record the Open-Meteo responses the tests use
+```
+
+## Answer bot (stage 2)
+
+A second bot anyone can ask: `/now Graz`, `/week Paris, Texas`, or just a city in a private chat.
+Several at once, separated by `;`: `/now Vienna; Graz` answers each, up to 5. Add `°F` for
+Fahrenheit; at the end it counts for every city. Its menu lists the commands, and its
+description says what it does before anyone presses Start: set both once with
+`uv run inv profile` (not on every start, so a cold start answers sooner).
+
+It replies in English, German, Italian, French or Spanish: a local command (`/jetzt`, `/woche`,
+`/ora`, `/settimana`, `/maintenant`, `/semaine`, `/ahora`, `/semana`) picks the language,
+otherwise the Telegram app's language does.
+
+Nothing about visitors is stored: no files, no database, and the logs name only the command and
+the outcome. A 15-minute forecast cache, a limit of 10 questions a minute per chat and 60 a
+minute for everyone together live in memory. Messages older than a minute are skipped, and the
+webhook refuses a request without the secret header, or over 1 MB, before reading it.
+
+### Hosting on Render (free)
+
+1. In @BotFather, `/newbot` for the answer bot (keep privacy mode on).
+2. On [Render](https://render.com): New → Blueprint → this repository. Render reads `render.yaml`,
+   creates one free web service, and generates `WEBHOOK_SECRET`.
+3. Paste the token into `ANSWER_BOT_TOKEN` when Render asks for it.
+4. In Telegram, send `/now Vienna` and `/woche Wien` to the new bot.
+
+Free services sleep after 15 minutes without traffic. A message wakes the service, so the first
+reply after a pause takes about a minute. Deploys wait for CI to pass.
+
+### Running it locally
+
+    uv run inv answer      # long polling with ANSWER_BOT_TOKEN from .env
+
+Polling removes the Render webhook. Afterwards, restart the service in Render's dashboard
+(Manual Deploy → Restart service); on start it registers the webhook again.
+
+## Data
+
+[Weather data by Open-Meteo.com](https://open-meteo.com/), licensed
+[CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). Place lookup uses
+[GeoNames](https://www.geonames.org/) through Open-Meteo's geocoding API.
+
+This project was built with AI assistance.
+
+# weather-live-dashboard
+
+Live weather for one city: current conditions, the next 7 days, how sure the forecast is, and
+air quality. Built with [NiceGUI](https://nicegui.io) and ECharts.
+
+The centrepiece is the **forecast spread**: 51 runs of the ECMWF ensemble, drawn as bands. The
+wider the band, the less the runs agree, so you can see which days the forecast is confident
+about and which it is guessing.
+
+![Vienna: current conditions, the 7-day forecast, the ensemble spread and air quality](docs/screenshots/vienna-light.png)
+
+| Dark theme | City search | Phone |
+|---|---|---|
+| ![Graz in the dark theme](docs/screenshots/graz-dark.png) | ![Search suggestions while typing](docs/screenshots/search.png) | ![The page at phone width](docs/screenshots/phone.png) |
+
+## Run it
+
+With Docker:
+
+```bash
+docker compose up -d --build
+# open http://127.0.0.1:8080/?city=Vienna
+docker compose down
+```
+
+If port 8080 is taken, pick another: `HOST_PORT=8085 docker compose up -d --build`.
+
+For development (needs [uv](https://docs.astral.sh/uv/)):
+
+```bash
+uv sync
+uv run inv dev      # http://127.0.0.1:8080
+uv run inv test     # offline, on recorded responses
+uv run inv lint
+uv run inv e2e      # one run against the real API
+uv run inv fixtures # re-record the test responses
+```
+
+## Watching the containers
+
+To watch the containers, images, volumes and logs in a terminal UI, run [lazydocker](https://github.com/jesseduffield/lazydocker) (optional):
+
+```bash
+lazydocker
+```
+
+## Links and settings
+
+The URL holds the whole view, so a link opens the same thing:
+`/?city=Springfield, Missouri, US&units=imperial&theme=dark`.
+
+| Variable | Default | Meaning |
+|---|---|---|
+| `HOST` | `127.0.0.1` (`0.0.0.0` in the image) | Address to listen on |
+| `PORT` | `8080` | Port |
+| `DEFAULT_CITY` | `Vienna` | City when the link names none and the browser's time zone names no city |
+| `CACHE_TTL` | `900` | Seconds a response is fresh (Open-Meteo updates every 15 minutes) |
+| `CACHE_MAX` | `500` | Cached responses kept |
+| `STALE_MAX` | `21600` | Seconds an old response may be shown when the API fails |
+
+## How it holds up
+
+- Each panel loads on its own; one failing API shows Retry in that panel only.
+- Responses are cached for 15 minutes, shared between visitors, and served stale for up to 6
+  hours if the API fails. After an HTTP 429 the app waits 60 seconds before asking again.
+
+## Data
+
+[Weather data by Open-Meteo.com](https://open-meteo.com/), licensed
+[CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). Place search uses
+[GeoNames](https://www.geonames.org/) through Open-Meteo's geocoding API.
+
+This project was built with AI assistance.
+
+# python-sandbox
+
+Small Python experiments, each in a folder of its own with its own Python version, lock file,
+tests and README. Some need Python 3.15, some run on 3.14.
+
+| Experiment | Python | What it shows |
+|---|---|---|
+| [free-threading](free-threading/) | 3.15t | Threads without the GIL; a PEP 810 lazy import |
+| [red-tide](red-tide/) | 3.15t | Red-tide bloom prediction; Optuna threads with the GIL on and off; lazy imports |
+
+Run one:
+
+```sh
+cd free-threading
+uv run pytest
+```
+
+Start a new one: `uv init --package --python 3.14 <name>`, add `ruff` and `pytest` as dev
+dependencies (`uv add --dev ruff pytest`), and a row to the table above. CI finds every folder
+with a `pyproject.toml` and runs its lint and tests.
+
+Every project here was built with AI assistance.
+
+# free-threading
+
+Python 3.15's free-threaded build (3.15t) runs threads without the GIL, so a thread pool
+spreads CPU-bound work across cores. The demo hashes eight large strings in a
+`ThreadPoolExecutor` and checks that the results match a plain loop. `hashlib` comes in through
+a [PEP 810](https://peps.python.org/pep-0810/) `lazy import`: it loads on first use, not at
+startup.
+
+```sh
+uv run free-threading     # Python 3.15.0, GIL off: ['1120a819', ...]
+uv run pytest             # GIL off, same digests as a loop, hashlib not loaded at import
+```
+
+`.python-version` asks for `3.15+freethreaded`; uv downloads it. With `PYTHON_GIL=1` the demo
+refuses to run.
+
+# red-tide
+
+Two questions, one experiment, on Python 3.15t (the free-threaded build):
+
+1. **Can weather and recent counts predict a Florida red tide bloom a week ahead?** The recent
+   counts can, clearly better than "it was a bloom last time". The weather adds nothing measurable,
+   and nothing calls the *start* of a bloom reliably.
+2. **Does Optuna tuning get faster with threads when the GIL is off?** Yes: 2.7× with 8 threads.
+   With the GIL on, the same threads make it *slower* than one thread.
+
+## The prediction
+
+A water sample counts as a **bloom** when the alga *Karenia brevis* is at or above
+100,000 cells/L. For a sample on day *t* in a 0.25° cell of the southwest Florida shelf (Tampa Bay
+to Naples), the model sees only data up to **t − 7 days**:
+
+- 30-day air temperature mean and trend (no sea temperature exists in the free archive before
+  2023; coastal air temperature stands in for it);
+- 30-day wind speed and the share of days with winds from the NNW;
+- 30-day rainfall;
+- the season, as the day of the year;
+- the latest *K. brevis* count within 20 km, at least 7 days old.
+
+Split by time, never at random: train 2000–2015 (18,720 samples), validate 2016–2017, test
+2018 to March 2024 (9,489 samples, 1,305 blooms). Two baselines and three scikit-learn models,
+each tuned with 100 Optuna trials on the validation years, then refit on 2000–2017. The "count
+only" model sees just the last nearby count, to show what the other features add:
+
+| Model | Test PR-AUC | Recall at 50 % precision | Onset PR-AUC |
+|---|---|---|---|
+| persistence: "a bloom if the last nearby count was one" | 0.420 | 0.688 | 0.052 |
+| season: bloom rate of the month in the training years | 0.232 | 0.000 | 0.088 |
+| count only: logistic regression on the last count | 0.554 | 0.737 | 0.163 |
+| logistic regression, all features | **0.558** | **0.754** | 0.173 |
+| gradient boosting (`HistGradientBoostingClassifier`), all features | 0.556 | 0.752 | **0.178** |
+
+PR-AUC is the main score because blooms are rare; guessing scores the bloom rate (0.138 on the
+test years). Accuracy is not reported: "never a bloom" would be 86 % accurate.
+
+What it means:
+
+- **The gain over persistence comes from the count itself.** Persistence only asks "was the last
+  count a bloom?"; using *how large* it was lifts PR-AUC from 0.42 to 0.55. Blooms last for weeks,
+  and the size of the last count says how far along one is.
+- **Weather and season add almost nothing.** All features together score 0.556–0.558 against
+  0.554 for the count alone: within noise. Air temperature, wind and rain from a reanalysis grid
+  are too coarse a stand-in for what drives a bloom offshore.
+- **Boosting finds nothing the linear model misses.** The best parameters are in
+  [`results/best_params.json`](results/best_params.json).
+- **The start of a bloom stays hard.** On "onset" samples (no bloom nearby a week before; 407
+  blooms among 7,850), the models score about 3× the bloom rate, but at 50 % precision they catch
+  none. They can rank a risky week higher; they cannot raise a reliable alarm.
+
+Sea temperature, salinity, river discharge and satellite chlorophyll would be the next features
+to try; the free NOAA servers for them timed out from the dev machine when checked (2026-10-28).
+
+## The threads
+
+The same 32 Optuna trials of the gradient boosting model in every cell: the parameter sets are
+drawn once with a seeded sampler ([`results/bench_params.json`](results/bench_params.json)) and
+queued, so the thread count cannot change which trials run, and early stopping is off so each
+trial's cost is fixed. Same 3.15t interpreter, GIL off (default) or forced on with `-X gil=1`;
+scikit-learn's own OpenMP/BLAS threads are pinned to 1, so only Optuna's threads count. Each run
+is a fresh process; GIL modes alternate and the whole grid ran 3 times. The table shows medians
+(the three runs agree within about 2 %; all runs are in `results/bench_runs.csv`).
+
+![Speedup against threads, GIL off and on](results/bench.png)
+
+| Threads | GIL off: seconds | speedup | GIL on: seconds | speedup |
+|---|---|---|---|---|
+| 1 | 53.3 | 1.00 | 56.6 | 1.00 |
+| 2 | 37.4 | 1.43 | 64.4 | 0.88 |
+| 4 | 29.5 | 1.81 | 94.1 | 0.60 |
+| 8 (SMT) | 20.0 | 2.66 | 111.5 | 0.51 |
+
+Machine: AMD Ryzen 5 2500U, 4 cores / 8 threads, a desktop session with a browser open (about
+1.7 load from other apps), so absolute times are indicative; the repeats agree closely. The 8-thread point uses SMT, where the
+curve keeps rising but well below perfect scaling. With the GIL on, every added thread makes the
+study slower: the threads take turns holding the GIL, and the hand-offs cost more than the work
+they could share (likely explanation, not profiled).
+
+## Lazy imports (PEP 810)
+
+`cli.py` imports pandas and its own modules with `lazy import`; scikit-learn and Optuna come in
+only through those modules, so `bloom --help` loads none of them:
+
+| `bloom --help` | median of 15 runs |
+|---|---|
+| lazy imports (as shipped) | 0.092 s |
+| everything eager | 1.794 s |
+
+This 3.15 build accepts only `-X lazy_imports=all|normal`, with no `none`, so the eager run turns
+the lazy imports off with `sys.set_lazy_imports_filter(lambda *a: False)`.
+
+## Run it
+
+```sh
+cd red-tide
+uv run bloom fetch      # HABSOS + Open-Meteo into data/ (about an hour: the free API is paced)
+uv run bloom train      # features, tuning, evaluation on the test years -> results/metrics.csv
+uv run bloom bench      # the threading grid (about 25 min) and startup times -> results/
+uv run bloom report     # prints the tables above
+uv run pytest           # offline; tests never touch the network
+```
+
+Weather comes on a 0.5° grid (20 cells): 25 years of daily data per cell counts as hundreds of
+calls against Open-Meteo's free limits, so `fetch` waits between requests and when rate-limited.
+
+## Data and licences
+
+- *K. brevis* cell counts: **HABSOS**, NOAA NCEI accession 0120767, version 8.8 (1953 to
+  March 2024; 104,932 samples in the region since 2000). Public domain.
+- Weather: **Open-Meteo** historical archive (ERA5 reanalysis), CC BY 4.0. Weather data by
+  Open-Meteo.com; contains modified Copernicus Climate Change Service information.
+
+# rust-sandbox
+
+Small Rust projects, one crate each under `projects/`, in one Cargo workspace. They share a lock
+file, the target folder and the lint settings (`unsafe_code` forbidden, clippy pedantic).
+
+| Project | What it does |
+|---|---|
+| [hello](projects/hello/) | The template: prints a greeting; copy it to start a project |
+| [todo](projects/todo/) | Command-line task list: due dates, tags, overdue first |
+| [finance](projects/finance/) | Terminal finance tracker: budgets vs actual, categories, trend (ratatui) |
+| [logline](projects/logline/) | Logs from several sources into one HTML timeline: collapsed repeats, incident bands |
+
+```sh
+cargo run -p hello -- Rust   # Hello, Rust!
+cargo test --workspace
+```
+
+Start a new one: `cargo new projects/<name>`, then in its `Cargo.toml` set `edition`,
+`license` and `publish` to `.workspace = true` and add `[lints] workspace = true`. CI runs
+`cargo fmt --check`, `cargo clippy -D warnings` and `cargo test` for the whole workspace.
+
+Every project here was built with AI assistance.
+
+# finance
+
+A personal finance tracker in the terminal, running on six months of made-up demo data
+(May–October 2026, one person in Vienna). `cargo run -p finance` opens it straight away: income,
+spending and budgets for the month, every transaction, and the spending trend, all by keyboard.
+Money is `rust_decimal::Decimal` throughout, never a float, so cent sums are exact.
+
+```text
+ Overview │ Transactions │ Trend                                     ◀ 2026-10 ▶
+Income      2847.63
+Spending    1409.96
+Net         1437.67
+┌ Budget vs actual ────────────────────────────────────────────────────────────┐
+│Rent          ██████████████████████████████████████████    850.00 / 850.00   │
+│Groceries     ████████████████████████████████████░░░░░░    302.33 / 350.00   │
+│Utilities     █████████████████████████████████████░░░░░    106.85 / 120.00   │
+│Transport     █████████████████████░░░░░░░░░░░░░░░░░░░░░     30.42 / 60.00    │
+│Eating out    ██████████░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░     37.68 / 150.00   │
+│Subscriptions ██████████████████████████░░░░░░░░░░░░░░░░     24.98 / 40.00    │
+│Shopping      ████████████████░░░░░░░░░░░░░░░░░░░░░░░░░░     38.54 / 100.00   │
+└──────────────────────────────────────────────────────────────────────────────┘
+┌ Largest expenses ────────────────────────────────────────────────────────────┐
+│2026-10-01  Hausverwaltung Gumpendorf          850.00                         │
+│2026-10-05  Wien Energie                        76.86                         │
+│2026-10-23  Amazon EU                           38.54                         │
+│2026-10-14  HOFER                               31.54                         │
+│2026-10-01  Wiener Linien Jahreskarte           30.42                         │
+└──────────────────────────────────────────────────────────────────────────────┘
+Tab view · ←/→ month · ↑/↓ scroll · q quit
+```
+
+(The Overview at 80×24, rendered with ratatui's `TestBackend`. In a terminal, over-budget
+categories are red: in this demo only August, where a new shelf puts Shopping 241.18 over.)
+
+## Keys
+
+`Tab` switches between Overview, Transactions and Trend, `←`/`→` change the month, `↑`/`↓`
+scroll the transactions, and `q` or `Esc` quits. Below 70×20 the app asks for a bigger window.
+
+## Commands
+
+```sh
+finance                                   # demo data, opens the app
+finance --csv my.csv [--rules rules.toml] # own files instead of the demo
+finance demo --out demo/                  # writes demo transactions.csv + rules.toml
+finance report --month 2026-09 [--csv …]  # plain-text month summary, no full-screen app
+```
+
+`report` prints the same numbers as the Overview:
+
+```console
+$ finance report --month 2026-08
+2026-08
+Income: 2847.63
+Spending: 1669.49
+Net: 1178.14
+Rent: 850.00 of 850.00 (0.00 left)
+Groceries: 269.50 of 350.00 (80.50 left)
+...
+Shopping: 341.18 of 100.00 (241.18 over)
+Uncategorized: 31.21
+Top expenses:
+  2026-08-01  Hausverwaltung Gumpendorf  850.00
+  2026-08-22  IKEA Wien Vösendorf  289.90
+  ...
+```
+
+## File formats
+
+`transactions.csv`: header exactly `date,payee,amount`; dates `YYYY-MM-DD`; amounts in EUR as plain
+decimals (`-12.50`, no exponent or `_`) with at most two decimals, negative for spending, positive for income or a refund. A bad row stops
+the import with its line number (`line 3: bad amount "lots"`).
+
+`rules.toml`: categories in order, and the first one with a keyword inside the payee wins
+(case-insensitive). Budgets are monthly, zero or more, and written as strings, so they never pass through a
+float. An empty keyword is an error, since it would match every payee. A refund at a grocery shop lowers grocery spending.
+
+```toml
+[[category]]
+name = "Income"
+income = true
+keywords = ["salary"]
+
+[[category]]
+name = "Groceries"
+budget = "350.00"
+keywords = ["billa", "spar", "hofer", "lidl", "penny"]
+```
+
+The built-in rules are in [`src/default_rules.toml`](src/default_rules.toml); `finance demo`
+writes a copy to edit.
+
+## Test
+
+```sh
+cargo test -p finance
+```
+
+# logline
+
+Logs from several sources merged into one timeline you can read in a minute. A log viewer shows
+one file at a time; logline puts them side by side:
+
+- **one timeline:** several files, or `docker compose logs -t` on stdin, merged by time;
+- **repeats collapsed:** "db pool exhausted, retrying ×854, 11:15:02–11:22:10" is one entry;
+- **incidents:** 5 or more error/warn lines within 60 s, across all sources, become a band with
+  its start, end and the sources involved;
+- **one HTML file:** no server, no network; open it from disk or attach it to a ticket.
+
+![The demo timeline around its incident](docs/timeline.png)
+
+(The demo logs from `logline demo`, shown in Vienna time: the database runs out of connections,
+the API retries hundreds of times, nginx returns 502s, then everything recovers.)
+
+## Commands
+
+```sh
+logline app.log db.log proxy.log -o timeline.html      # merge three files into one HTML timeline
+docker compose logs -t --no-color | logline - -o t.html  # stdin; split by the "service |" prefix
+logline app.log db.log --format text                     # colored terminal output instead of HTML
+logline demo --out demo/                                 # writes demo logs of a made-up incident
+```
+
+With `cargo`: `cargo run --release -p logline -- demo --out demo/`, then
+`cargo run --release -p logline -- demo/*.log -o timeline.html`.
+
+The page has a lane per source, filters by source and level, a search box, and a "Next incident"
+button. Click a collapsed entry to see its raw lines (the first 5 and the last 5).
+
+## Formats and levels
+
+Each line is recognized on its own:
+
+| Format | Example | Level |
+|---|---|---|
+| JSON | `{"ts":"…","level":"error","msg":"…"}` | `level` / `lvl` / `severity` |
+| logfmt | `time=… level=warn msg="slow query"` | `level` / `lvl` / `severity` |
+| syslog (RFC 5424, 3164) | `<11>1 2026-10-28T10:15:00Z host app …` | priority 0–3 error, 4 warn, else info |
+| nginx/Apache combined | `1.2.3.4 - - [28/Oct/2026:10:15:00 +0000] "GET /" 502 …` | 5xx error, everything else info |
+| Postgres | `2026-10-28 10:15:00.123 UTC [77] FATAL:  …` | `ERROR`/`FATAL`/`PANIC` error, `WARNING` warn |
+| plain | `2026-10-28 10:15:00,001 [WARN] cache miss` | a level word near the start, else info |
+
+A line without a timestamp (a stack trace, wrapped output) belongs to the line before it. A
+line that matches nothing is kept as text, never dropped. Log text is data, never markup: every
+string is escaped, so a line containing `<script>` shows as text.
+
+Gzipped files (`app.log.gz`, or any file or stdin that starts with the gzip magic bytes) are
+decompressed as they are read; the lane is named without the `.gz`. Repeats are compared with
+ids, IPv4 and IPv6 addresses, hex values and numbers masked.
+
+## Options
+
+| Flag | Default | What it does |
+|---|---|---|
+| `--tz ZONE` | `UTC` | zone for timestamps that carry none, and for display (`Europe/Vienna`, `+02:00`) |
+| `--shift NAME=DUR` | | move one source's clock, e.g. `--shift db=+2s` |
+| `--from` / `--to TIME` | | keep only lines inside this window |
+| `--collapse-gap DUR` | `60s` | repeats further apart start a new entry |
+| `--incident-min N` / `--incident-window DUR` | `5` / `60s` | error/warn lines that make an incident |
+| `--max-entries N` | `50000` | later entries are cut by time; the summary says where and suggests `--from` |
+| `--year N` | this year | for syslog lines that have no year; a file that runs from December into January moves to the next year |
+| `--stats` | | lines read, lines per second and collapse ratio on stderr |
+
+## Throughput
+
+On the dev machine (AMD Ryzen 5 2500U, 4 cores / 8 threads, one thread used), a 1.06 GB demo
+file set (`logline demo --scale 1270`, 10.97 million lines) takes about 29 s with
+`--release --format text -o /dev/null`: **about 380,000 lines/s, 37 MB/s**, with a peak of 29 MB
+of memory. Input is streamed; memory grows with the entries kept, not with the input size.
+
+## Test
+
+```sh
+cargo test -p logline
+```
+
+# todo
+
+A small command-line task list. Tasks have an optional due date and tags, overdue ones come
+first, and everything lives in one JSON file. Ids stay stable: removing a task never renumbers
+the others, and an id is never handed out twice.
+
+```console
+$ todo add "Buy milk" --due 2026-11-02 --tag home
+added 1
+$ todo add "Write spec"
+added 2
+$ todo add "Renew passport" --due 2026-10-20
+added 3
+$ todo list
+  3 [ ] overdue 2026-10-20 Renew passport
+  1 [ ] 2026-11-02         Buy milk #home
+  2 [ ]                    Write spec
+$ todo list --due today
+  3 [ ] overdue 2026-10-20 Renew passport
+$ todo list --tag home
+  1 [ ] 2026-11-02         Buy milk #home
+$ todo done 3
+$ todo rm 2
+$ todo list --all
+  3 [x] 2026-10-20         Renew passport
+  1 [ ] 2026-11-02         Buy milk #home
+```
+
+(Run on 2026-10-28.) `--due` takes `today` (due today or overdue), `overdue`, or a date
+`YYYY-MM-DD` (due on or before it). `--due` and `--tag` also work with `--all`.
+
+## Where the file lives
+
+`--file <path>`, else `$TODO_FILE`, else `$XDG_DATA_HOME/todo/todo.json`, else
+`~/.local/share/todo/todo.json`. The folder is created on the first write.
+
+Saving writes `todo.json.tmp` next to the file and renames it over the old one, so a crash
+never leaves half a file. A file that does not parse is reported and never overwritten.
+Commands that change the list lock `todo.json.lock` from reading to saving, so two `todo` runs
+at once never lose a task. A symlinked `todo.json` stays a link; its target gets the new list.
+
+## Run and test
+
+```sh
+cargo run -p todo -- add "Try it" --tag demo
+cargo test -p todo
+```
