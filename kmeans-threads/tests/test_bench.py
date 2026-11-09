@@ -7,7 +7,7 @@ from kmeans_threads import bench, variants
 
 
 def test_half_rows():
-    rows = bench.run_half(300, (1, 2), 1)
+    rows, _ = bench.run_half(300, (1, 2), 1)
     assert [(r["variant"], r["workers"]) for r in rows] == [
         ("loop", 1),
         ("threads", 1),
@@ -56,10 +56,32 @@ def test_disagreement_aborts(monkeypatch, tmp_path):
 
 
 def test_table():
-    rows = bench.run_half(300, (1,), 1)
+    rows, _ = bench.run_half(300, (1,), 1)
     lines = bench.table(rows).splitlines()
     assert (
         lines[0]
         == "| variant | workers | GIL | seconds | pool start-up s | speedup vs loop |"
     )
     assert len(lines) == 2 + len(rows)
+
+
+def test_gil_on_half_failure_is_a_clean_exit(monkeypatch, tmp_path):
+    monkeypatch.setattr(sys, "executable", "false")
+    with pytest.raises(SystemExit, match="GIL-on half failed"):
+        bench.bench(300, tmp_path / "r.csv", workers=(1,), runs=1)
+    assert not (tmp_path / "r.csv").exists()
+
+
+def test_halves_must_agree(monkeypatch, tmp_path):
+    def shifted(real):
+        def fit(*args):
+            centres, labels = real(*args)
+            return [(c[0] + 1e-6, *c[1:]) for c in centres], labels
+
+        return fit
+
+    for name, real in list(variants.VARIANTS.items()):
+        monkeypatch.setitem(variants.VARIANTS, name, shifted(real))
+    with pytest.raises(SystemExit, match="GIL-on half disagrees with the GIL-off half"):
+        bench.bench(300, tmp_path / "r.csv", workers=(1,), runs=1)
+    assert not (tmp_path / "r.csv").exists()

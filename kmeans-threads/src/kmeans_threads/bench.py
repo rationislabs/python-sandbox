@@ -46,8 +46,11 @@ def cpu_name() -> str:
     return platform.processor() or "unknown"
 
 
-def run_half(points: int, workers: Sequence[int], runs: int) -> list[dict]:
-    """One row per variant and worker count, in the current GIL mode only."""
+def run_half(
+    points: int, workers: Sequence[int], runs: int
+) -> tuple[list[dict], tuple]:
+    """One row per variant and worker count, in the current GIL mode only, and the loop's
+    `(centres, labels)` that every variant agreed with."""
     data = make_data(points, SEED)
     init = kmeanspp(data.points, K, SEED)
     ref = None
@@ -90,14 +93,14 @@ def run_half(points: int, workers: Sequence[int], runs: int) -> list[dict]:
                 }
             )
             print(f"{name} {w} workers: {seconds:.3f} s", file=sys.stderr, flush=True)
-    return rows
+    return rows, ref
 
 
 def bench(
     points: int, out: Path, workers: Sequence[int] = WORKERS, runs: int = RUNS
 ) -> list[dict]:
     """Both halves; `out` is written only when both are clean."""
-    off = run_half(points, workers, runs)
+    off, ref = run_half(points, workers, runs)
     if any(r["gil"] == "on" for r in off):
         raise SystemExit(
             "GIL is on in the GIL-off half (an extension module turned it back on); "
@@ -118,9 +121,18 @@ def bench(
         env={**os.environ, "PYTHON_GIL": "1"},
         stdout=subprocess.PIPE,
         text=True,
-        check=True,
+        check=False,
     )
-    on = json.loads(child.stdout)
+    if child.returncode != 0:
+        raise SystemExit(
+            f"GIL-on half failed (exit {child.returncode}); no results written"
+        )
+    half = json.loads(child.stdout)
+    on = half["rows"]
+    if not (agree(half["centres"], ref[0]) and half["labels"] == list(ref[1])):
+        raise SystemExit(
+            "GIL-on half disagrees with the GIL-off half; no results written"
+        )
     if any(r["gil"] == "off" for r in on):
         raise SystemExit("PYTHON_GIL=1 did not turn the GIL on; no results written")
     rows = off + on
@@ -151,4 +163,5 @@ if __name__ == "__main__":
     p.add_argument("--workers", required=True)
     a = p.parse_args()
     ws = [int(w) for w in a.workers.split(",")]
-    print(json.dumps(run_half(a.points, ws, a.runs)))
+    rows, (centres, labels) = run_half(a.points, ws, a.runs)
+    print(json.dumps({"rows": rows, "centres": centres, "labels": list(labels)}))
