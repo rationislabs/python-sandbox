@@ -1,5 +1,7 @@
 """The model: embeddings of the previous characters, one tanh layer, softmax. Written by hand."""
 
+from pathlib import Path
+
 import numpy as np
 
 type Params = dict[str, np.ndarray]
@@ -89,3 +91,31 @@ class Adam:
             self.params[k] -= (lr * (m / c1) / (np.sqrt(v / c2) + self.eps)).astype(
                 m.dtype
             )
+
+
+def sample(
+    params: Params, vocab: list[str], start: np.ndarray, n: int, temp: float, seed: int
+) -> str:
+    """`n` characters after `start`, each drawn from softmax(logits / temp)."""
+    context = params["W1"].shape[0] // params["C"].shape[1]
+    rng = np.random.default_rng(seed)
+    ctx = [int(i) for i in start[-context:]]
+    out = []
+    for _ in range(n):
+        z = logits(params, np.array([ctx[-context:]]))[0].astype(np.float64) / temp
+        p = np.exp(z - z.max())
+        i = int(rng.choice(len(p), p=p / p.sum()))
+        out.append(vocab[i])
+        ctx.append(i)
+    return "".join(out)
+
+
+def save(path: Path, params: Params, vocab: list[str], start: np.ndarray) -> None:
+    """One file: weights, vocabulary and the sampling start context."""
+    np.savez_compressed(path, **params, vocab=np.array(vocab, dtype="<U1"), start=start)
+
+
+def load(path: Path) -> tuple[Params, list[str], np.ndarray]:
+    with np.load(path, allow_pickle=False) as f:
+        params = {k: f[k] for k in ("C", "W1", "b1", "W2", "b2")}
+        return params, f["vocab"].tolist(), f["start"]
