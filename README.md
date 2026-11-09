@@ -8,6 +8,7 @@ tests and README. Some need Python 3.15, some run on 3.14.
 | [free-threading](free-threading/) | 3.15t | Threads without the GIL; a PEP 810 lazy import |
 | [red-tide](red-tide/) | 3.15t | Red-tide bloom prediction; Optuna threads with the GIL on and off; lazy imports |
 | [kmeans-threads](kmeans-threads/) | 3.15t | One k-means five ways (loop, threads, processes, numpy, numpy in threads), GIL on and off |
+| [char-model](char-model/) | 3.14 | A character-level language model in plain numpy, trained on these READMEs |
 
 Run one:
 
