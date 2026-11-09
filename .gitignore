@@ -3,6 +3,7 @@ __pycache__/
 *.egg-info/
 dist/
 red-tide/data/
+char-model/runs/
 
 # AI tooling: never commit
 .claude/
